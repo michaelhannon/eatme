@@ -1,15 +1,38 @@
 const { chromium } = require('playwright');
 
+function getProxyConfig() {
+  const host = process.env.PROXY_HOST;
+  const port = process.env.PROXY_PORT;
+  const user = process.env.PROXY_USER;
+  const pass = process.env.PROXY_PASS;
+  if (!host || !port) return null;
+  return {
+    server: `http://${host}:${port}`,
+    username: user,
+    password: pass
+  };
+}
+
 async function scrapeDoorDash({ address, dish, credentials, headless = true, timeout = 45000 }) {
+  const proxy = getProxyConfig();
+  if (!proxy) {
+    console.log(`[DoorDash] No proxy configured — skipping (blocked by Cloudflare on cloud IPs)`);
+    return [];
+  }
+
+  console.log(`[DoorDash] Using proxy: ${proxy.server}`);
+
   const browser = await chromium.launch({
     headless,
+    proxy,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled']
   });
 
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
     viewport: { width: 1280, height: 800 },
-    extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' }
+    extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
+    proxy
   });
 
   await context.addInitScript(() => {
@@ -20,48 +43,43 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
   const results = [];
 
   try {
-    console.log(`[DoorDash] Loading homepage...`);
+    console.log(`[DoorDash] Loading homepage via residential proxy...`);
     await page.goto('https://www.doordash.com', { waitUntil: 'domcontentloaded', timeout });
     await page.waitForTimeout(3000);
 
-    // The login modal has an iframe that intercepts clicks on the address input.
-    // Fix: remove the modal from the DOM entirely, then interact with the address input.
+    const title = await page.title();
+    console.log(`[DoorDash] Page title: ${title}`);
+
+    // Remove login modal from DOM
     await page.evaluate(() => {
-      // Remove login modal and any overlay blocking the address input
-      const selectors = [
-        '[data-testid="LAYER-MANAGER-MODAL"]',
-        '[class*="ModalLayer"]',
-        '[class*="overlay"]',
-        '[class*="Overlay"]',
-        'iframe[title*="Login"]',
-        'iframe[title*="Signup"]',
-        '[class*="modal"]',
-      ];
-      selectors.forEach(sel => {
-        document.querySelectorAll(sel).forEach(el => el.remove());
-      });
+      ['[data-testid="LAYER-MANAGER-MODAL"]', '[class*="ModalLayer"]', 'iframe[title*="Login"]', 'iframe[title*="Signup"]']
+        .forEach(sel => document.querySelectorAll(sel).forEach(el => el.remove()));
     });
     await page.waitForTimeout(500);
 
-    // Now find and fill the address input
-    const addressInput = await page.$('#HomeAddressAutocomplete, input[placeholder="Enter delivery address"], input[placeholder*="delivery address"]');
-    if (addressInput) {
-      console.log('[DoorDash] Found address input, filling...');
-      await addressInput.click({ force: true });
-      await page.waitForTimeout(300);
-      await addressInput.fill('');
-      await addressInput.type(address, { delay: 50 });
-      await page.waitForTimeout(2000);
+    // Wait for visible address input
+    await page.waitForFunction(() => {
+      const inputs = Array.from(document.querySelectorAll('input'));
+      return inputs.some(i => i.offsetWidth > 0 && i.offsetHeight > 0);
+    }, { timeout: 10000 }).catch(() => {});
 
-      const suggestions = await page.evaluate(() =>
-        Array.from(document.querySelectorAll('li[role="option"]')).slice(0, 3).map(i => i.innerText?.substring(0, 60))
-      );
-      console.log(`[DoorDash] Suggestions: ${JSON.stringify(suggestions)}`);
+    const inputHandle = await page.evaluateHandle(() => {
+      return Array.from(document.querySelectorAll('input')).find(i => i.offsetWidth > 0 && i.offsetHeight > 0) || null;
+    });
+
+    const inputEl = inputHandle.asElement();
+    if (inputEl) {
+      const placeholder = await inputEl.evaluate(el => el.placeholder);
+      console.log(`[DoorDash] Found input: "${placeholder}"`);
+      await inputEl.click();
+      await inputEl.fill('');
+      await inputEl.type(address, { delay: 50 });
+      await page.waitForTimeout(2000);
 
       const suggestion = await page.$('li[role="option"]:first-child');
       if (suggestion) {
         await suggestion.click({ force: true });
-        console.log('[DoorDash] Clicked first suggestion');
+        console.log('[DoorDash] Address suggestion clicked');
       } else {
         await page.keyboard.press('ArrowDown');
         await page.waitForTimeout(300);
@@ -70,22 +88,13 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
       await page.waitForTimeout(3000);
       console.log(`[DoorDash] URL after address: ${page.url()}`);
     } else {
-      console.log('[DoorDash] Address input not found, logging all inputs:');
-      const inputs = await page.evaluate(() =>
-        Array.from(document.querySelectorAll('input')).map(i => ({ id: i.id, placeholder: i.placeholder, visible: i.offsetWidth > 0 }))
-      );
-      console.log(JSON.stringify(inputs));
+      console.log('[DoorDash] No visible input found');
     }
 
-    // Navigate to search
-    const encodedDish = encodeURIComponent(dish);
-    await page.goto(`https://www.doordash.com/search/store/${encodedDish}/`, { waitUntil: 'domcontentloaded', timeout });
+    // Search
+    await page.goto(`https://www.doordash.com/search/store/${encodeURIComponent(dish)}/`, { waitUntil: 'domcontentloaded', timeout });
     await page.waitForTimeout(4000);
-
-    const searchUrl = page.url();
-    console.log(`[DoorDash] Search URL: ${searchUrl}`);
-    const preview = await page.evaluate(() => document.body.innerText.substring(0, 200));
-    console.log(`[DoorDash] Preview: ${preview.substring(0, 150)}`);
+    console.log(`[DoorDash] Search URL: ${page.url()}`);
 
     await page.waitForSelector('a[href*="/store/"]', { timeout: 10000 }).catch(() => {});
 
@@ -96,11 +105,10 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
         const href = card.getAttribute('href');
         if (!href || seen.has(href)) continue;
         seen.add(href);
-        const text = card.innerText || '';
-        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        const lines = (card.innerText || '').split('\n').map(l => l.trim()).filter(l => l.length > 0);
         const name = lines[0];
         if (name && name.length > 2 && !name.startsWith('$')) {
-          out.push({ href, name, text, lines });
+          out.push({ href, name, text: card.innerText, lines });
           if (out.length >= 6) break;
         }
       }
@@ -108,7 +116,6 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
     });
 
     console.log(`[DoorDash] Found ${rawCards.length} stores`);
-    if (rawCards[0]) console.log(`[DoorDash] Sample: ${JSON.stringify(rawCards[0].lines.slice(0, 6))}`);
 
     const storeData = rawCards.map(card => {
       const text = card.text;

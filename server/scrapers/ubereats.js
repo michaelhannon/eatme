@@ -1,12 +1,26 @@
 const { chromium } = require('playwright');
 
+function getProxyConfig() {
+  const host = process.env.PROXY_HOST;
+  const port = process.env.PROXY_PORT;
+  const user = process.env.PROXY_USER;
+  const pass = process.env.PROXY_PASS;
+  if (!host || !port) return null;
+  return { server: `http://${host}:${port}`, username: user, password: pass };
+}
+
+
 async function scrapeUberEats({ address, dish, credentials, headless = true, timeout = 45000 }) {
+  const proxy = getProxyConfig();
+  if (proxy) console.log(`[UberEats] Using proxy: ${proxy.server}`);
   const browser = await chromium.launch({
     headless,
+    ...(proxy && { proxy }),
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled']
   });
 
   const context = await browser.newContext({
+    ...(proxy && { proxy }),
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
     viewport: { width: 1280, height: 800 },
     locale: 'en-US',
