@@ -22,98 +22,94 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
   const encodedDish = encodeURIComponent(dish);
 
   try {
-    // Step 1: Load homepage and set address FIRST
-    console.log(`[${platform}] Loading homepage to set address...`);
+    // Step 1: Set address first
+    console.log(`[${platform}] Setting address: ${address}`);
     await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout });
     await page.waitForTimeout(2500);
-
-    // Dismiss modal
     await page.keyboard.press('Escape');
     await page.waitForTimeout(600);
 
-    const addressInput = await page.waitForSelector(
-      'input[placeholder*="Enter delivery address"], input[placeholder*="delivery address"], input[placeholder*="address"]',
-      { timeout: 15000 }
-    ).catch(() => null);
-
+    const addressInput = await page.$('input[placeholder*="Enter delivery address"], input[placeholder*="delivery address"]');
     if (addressInput) {
       await addressInput.click({ force: true });
       await addressInput.fill('');
-      await addressInput.type(address, { delay: 50 });
+      await addressInput.type(address, { delay: 40 });
       await page.waitForTimeout(1800);
-
       const suggestion = await page.$('li[role="option"]:first-child, [data-testid="suggestion-item"]:first-child');
-      if (suggestion) {
-        await suggestion.click({ force: true });
-        console.log(`[${platform}] Address suggestion selected`);
-      } else {
-        await page.keyboard.press('ArrowDown');
-        await page.waitForTimeout(300);
-        await page.keyboard.press('Enter');
-      }
+      if (suggestion) { await suggestion.click({ force: true }); }
+      else { await page.keyboard.press('ArrowDown'); await page.waitForTimeout(300); await page.keyboard.press('Enter'); }
       await page.waitForTimeout(2500);
       console.log(`[${platform}] URL after address: ${page.url()}`);
-    } else {
-      console.log(`[${platform}] WARNING: No address input found`);
     }
 
-    // Step 2: Navigate to search with dish
+    // Step 2: Search
     await page.goto(`${baseUrl}/food-delivery/search?queryText=${encodedDish}`, { waitUntil: 'domcontentloaded', timeout });
-    await page.waitForTimeout(3000);
-
+    await page.waitForTimeout(4000);
     console.log(`[${platform}] Search URL: ${page.url()}`);
-    const bodyText = await page.evaluate(() => document.body.innerText.substring(0, 300));
-    console.log(`[${platform}] Page preview: ${bodyText}`);
 
-    // Wait for restaurant cards
-    await page.waitForSelector(
-      '[class*="restaurant-card"], [class*="RestaurantCard"], [data-testid="restaurant-card"]',
-      { timeout: 15000 }
-    ).catch(e => console.log(`[${platform}] No cards:`, e.message.split('\n')[0]));
+    // Step 3: Parse restaurant cards via text content
+    await page.waitForSelector('a[href*="/restaurant/"]', { timeout: 15000 })
+      .catch(() => console.log(`[${platform}] No restaurant links found`));
 
-    // Step 3: Scrape restaurant cards
-    const cards = await page.$$eval(
-      '[class*="restaurant-card"], [class*="RestaurantCard"], [data-testid="restaurant-card"]',
-      (els) => els.slice(0, 12).map(el => {
-        const name = el.querySelector('[class*="restaurant-name"], [class*="RestaurantName"], h3, h4, [class*="name"]')?.innerText?.trim();
-        const rating = el.querySelector('[class*="rating"], [class*="Rating"]')?.innerText?.trim();
-        const deliveryFee = el.querySelector('[class*="delivery-fee"], [class*="DeliveryFee"], [class*="fee"]')?.innerText?.trim();
-        const deliveryTime = el.querySelector('[class*="delivery-time"], [class*="time"], [class*="eta"]')?.innerText?.trim();
-        const href = el.querySelector('a')?.getAttribute('href');
-        return { name, rating, deliveryFee, deliveryTime, href };
-      }).filter(c => c.name)
-    ).catch(() => []);
+    const rawCards = await page.evaluate(() => {
+      const cards = document.querySelectorAll('a[href*="/restaurant/"], [class*="restaurant-card"], [class*="RestaurantCard"]');
+      return Array.from(cards).slice(0, 12).map(card => {
+        const text = card.innerText || '';
+        const href = card.tagName === 'A' ? card.getAttribute('href') : card.querySelector('a')?.getAttribute('href');
+        const name = (card.querySelector('h3, h4, [class*="name"]')?.innerText?.trim()) || text.split('\n')[0]?.trim();
+        return { text, href, name };
+      }).filter(c => c.name && c.name.length > 2 && !c.name.includes('$'));
+    });
 
-    console.log(`[${platform}] Found ${cards.length} restaurants`);
+    console.log(`[${platform}] Raw cards: ${rawCards.length}`);
+    if (rawCards.length > 0) console.log(`[${platform}] Sample: ${rawCards[0].text.substring(0, 200)}`);
 
-    // Step 4: Drill into each restaurant for item price
-    for (const card of cards) {
-      const deliveryFee = parseDeliveryFee(card.deliveryFee);
+    for (const card of rawCards) {
+      const text = card.text;
+
+      let deliveryFee = null;
+      if (/free/i.test(text)) deliveryFee = 0;
+      else {
+        const feeMatch = text.match(/\$(\d+\.?\d*)\s*(?:delivery|fee)/i) || text.match(/(?:delivery|fee)[:\s]+\$(\d+\.?\d*)/i);
+        if (feeMatch) deliveryFee = parseFloat(feeMatch[1]);
+      }
+
+      let rating = null;
+      const ratingMatch = text.match(/\b(4\.\d|5\.0|3\.\d)\b/);
+      if (ratingMatch) rating = parseFloat(ratingMatch[1]);
+
+      let eta = null;
+      const etaMatch = text.match(/(\d+[\s–\-]+\d+\s*min|\d+\s*min)/i);
+      if (etaMatch) eta = etaMatch[1];
+
+      console.log(`[${platform}] ${card.name} | fee: ${deliveryFee} | rating: ${rating} | eta: ${eta}`);
+
+      // Step 4: Get item price from restaurant page
       let itemPrice = null;
-
       if (card.href) {
         try {
           const storeUrl = card.href.startsWith('http') ? card.href : `${baseUrl}${card.href}`;
           const storePage = await context.newPage();
-          await storePage.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
-          await storePage.waitForTimeout(2000);
+          await storePage.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
+          await storePage.waitForTimeout(3000);
 
-          const menuItems = await storePage.$$eval(
-            '[class*="menuItem"], [class*="MenuItem"], [data-testid="menu-item"]',
-            (items, searchDish) => {
-              const lowerDish = searchDish.toLowerCase();
-              return items.map(item => {
-                const name = item.querySelector('[class*="name"], [class*="title"]')?.innerText?.trim();
-                const price = item.querySelector('[class*="price"]')?.innerText?.trim();
-                return { name, price };
-              }).filter(i => i.name && i.price && i.name.toLowerCase().includes(lowerDish.split(' ')[0]));
-            },
-            dish
-          ).catch(() => []);
+          const priceData = await storePage.evaluate((searchDish) => {
+            const dishLower = searchDish.toLowerCase();
+            const lines = document.body.innerText.split('\n').map(l => l.trim()).filter(l => l);
+            const matches = [];
+            for (let i = 0; i < lines.length; i++) {
+              if (lines[i].toLowerCase().includes(dishLower)) {
+                const window = lines.slice(Math.max(0, i-1), i+4).join(' ');
+                const priceMatch = window.match(/\$(\d+\.\d{2})/);
+                if (priceMatch) matches.push({ context: window.substring(0, 80), price: priceMatch[1] });
+              }
+            }
+            return matches.slice(0, 3);
+          }, dish);
 
-          if (menuItems.length > 0) {
-            itemPrice = parsePrice(menuItems[0].price);
-            console.log(`[${platform}] ${card.name}: ${menuItems[0].name} = ${menuItems[0].price}`);
+          if (priceData.length > 0) {
+            itemPrice = parseFloat(priceData[0].price);
+            console.log(`[${platform}] ${card.name} price: $${itemPrice}`);
           }
           await storePage.close();
         } catch(e) {
@@ -122,20 +118,10 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
       }
 
       const total = (itemPrice != null && deliveryFee != null) ? parseFloat((itemPrice + deliveryFee).toFixed(2)) : null;
-
-      results.push({
-        platform,
-        restaurant: card.name,
-        item: dish,
-        itemPrice,
-        deliveryFee,
-        totalPrice: total,
-        rating: parseRating(card.rating),
-        eta: card.deliveryTime || null,
-        url: page.url()
-      });
+      results.push({ platform, restaurant: card.name, item: dish, itemPrice, deliveryFee, totalPrice: total, rating, eta, url: page.url() });
     }
 
+    console.log(`[${platform}] Final results: ${results.length}`);
   } catch (err) {
     console.error(`[${platform}] Scrape error:`, err.message.split('\n')[0]);
   } finally {
@@ -146,23 +132,6 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
 
 async function scrapeSeamless(params) {
   return scrapeGrubHub({ ...params, platform: 'Seamless' });
-}
-
-function parsePrice(str) {
-  if (!str) return null;
-  const match = str.match(/\$?([\d.]+)/);
-  return match ? parseFloat(match[1]) : null;
-}
-function parseDeliveryFee(str) {
-  if (!str) return null;
-  if (str.toLowerCase().includes('free')) return 0;
-  const match = str.match(/\$?([\d.]+)/);
-  return match ? parseFloat(match[1]) : null;
-}
-function parseRating(str) {
-  if (!str) return null;
-  const match = str.match(/([\d.]+)/);
-  return match ? parseFloat(match[1]) : null;
 }
 
 module.exports = { scrapeGrubHub, scrapeSeamless };

@@ -20,100 +20,98 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
   const results = [];
 
   try {
-    // Step 1: Land on homepage and set address FIRST
-    console.log(`[DoorDash] Loading homepage to set address...`);
+    // Step 1: Set address first
+    console.log(`[DoorDash] Setting address: ${address}`);
     await page.goto('https://www.doordash.com', { waitUntil: 'domcontentloaded', timeout });
     await page.waitForTimeout(2500);
-
-    // Dismiss login modal with Escape
     await page.keyboard.press('Escape');
     await page.waitForTimeout(800);
-    await page.mouse.click(10, 10);
-    await page.waitForTimeout(400);
 
-    // Find address input
-    const addressInput = await page.waitForSelector(
-      '#HomeAddressAutocomplete, input[placeholder="Enter delivery address"], input[placeholder*="delivery address"]',
-      { timeout: 15000 }
-    ).catch(() => null);
-
+    const addressInput = await page.$('#HomeAddressAutocomplete, input[placeholder*="delivery address"], input[placeholder*="Enter delivery"]');
     if (addressInput) {
       await addressInput.click({ force: true });
       await addressInput.fill('');
-      await addressInput.type(address, { delay: 50 });
+      await addressInput.type(address, { delay: 40 });
       await page.waitForTimeout(1800);
-
-      const suggestion = await page.$('li[role="option"]:first-child, [id*="Suggestion"]:first-child, [class*="autocomplete"] li:first-child');
-      if (suggestion) {
-        await suggestion.click({ force: true });
-        console.log('[DoorDash] Address suggestion selected');
-      } else {
-        await page.keyboard.press('ArrowDown');
-        await page.waitForTimeout(300);
-        await page.keyboard.press('Enter');
-      }
+      const suggestion = await page.$('li[role="option"]:first-child, [id*="Suggestion"]:first-child');
+      if (suggestion) { await suggestion.click({ force: true }); }
+      else { await page.keyboard.press('ArrowDown'); await page.waitForTimeout(300); await page.keyboard.press('Enter'); }
       await page.waitForTimeout(2500);
       console.log(`[DoorDash] URL after address: ${page.url()}`);
-    } else {
-      console.log('[DoorDash] WARNING: No address input found');
     }
 
-    // Step 2: Search for dish
+    // Step 2: Search
     const encodedDish = encodeURIComponent(dish);
     await page.goto(`https://www.doordash.com/search/store/${encodedDish}/`, { waitUntil: 'domcontentloaded', timeout });
-    await page.waitForTimeout(3000);
-
+    await page.waitForTimeout(4000);
     console.log(`[DoorDash] Search URL: ${page.url()}`);
-    const bodyText = await page.evaluate(() => document.body.innerText.substring(0, 300));
-    console.log(`[DoorDash] Page preview: ${bodyText}`);
 
-    // Wait for store cards
-    await page.waitForSelector('[data-anchor-id="StoreCard"], [class*="StoreCard"]', { timeout: 15000 })
-      .catch(e => console.log('[DoorDash] No store cards:', e.message.split('\n')[0]));
+    // Step 3: Parse store cards using text content — CSS classes change too often
+    await page.waitForSelector('a[href*="/store/"]', { timeout: 15000 })
+      .catch(() => console.log('[DoorDash] No store links found'));
 
-    // Step 3: Scrape store cards
-    const storeCards = await page.$$eval(
-      '[data-anchor-id="StoreCard"], [class*="StoreCard"]',
-      (cards) => cards.slice(0, 12).map(card => {
-        const name = card.querySelector('[data-anchor-id="StoreCardName"], [class*="name"], h3')?.innerText?.trim();
-        const rating = card.querySelector('[class*="rating"], [class*="Rating"]')?.innerText?.trim();
-        const deliveryFee = card.querySelector('[class*="delivery-fee"], [class*="DeliveryFee"], [class*="fee"]')?.innerText?.trim();
-        const deliveryTime = card.querySelector('[class*="delivery-time"], [class*="DeliveryTime"], [class*="eta"]')?.innerText?.trim();
-        const href = card.querySelector('a')?.getAttribute('href');
-        return { name, rating, deliveryFee, deliveryTime, href };
-      }).filter(c => c.name)
-    ).catch(() => []);
+    const rawCards = await page.evaluate(() => {
+      const cards = document.querySelectorAll('a[href*="/store/"]');
+      return Array.from(cards).slice(0, 12).map(card => {
+        const text = card.innerText || '';
+        const href = card.getAttribute('href');
+        const nameEl = card.querySelector('h3, h4, span[data-anchor-id*="Name"]');
+        const name = nameEl?.innerText?.trim() || text.split('\n')[0]?.trim();
+        return { text, href, name };
+      }).filter(c => c.name && c.name.length > 2 && !c.name.includes('$'));
+    });
 
-    console.log(`[DoorDash] Found ${storeCards.length} stores`);
+    console.log(`[DoorDash] Raw cards: ${rawCards.length}`);
+    if (rawCards.length > 0) console.log(`[DoorDash] Sample: ${rawCards[0].text.substring(0, 200)}`);
 
-    // Step 4: Drill into each store to get item price
-    for (const card of storeCards) {
-      const deliveryFee = parseDeliveryFee(card.deliveryFee);
+    for (const card of rawCards) {
+      const text = card.text;
+
+      let deliveryFee = null;
+      if (/free/i.test(text)) deliveryFee = 0;
+      else {
+        const feeMatch = text.match(/\$(\d+\.?\d*)\s*(?:delivery|fee)/i) || text.match(/(?:delivery|fee)[:\s]+\$(\d+\.?\d*)/i);
+        if (feeMatch) deliveryFee = parseFloat(feeMatch[1]);
+      }
+
+      let rating = null;
+      const ratingMatch = text.match(/\b(4\.\d|5\.0|3\.\d)\b/);
+      if (ratingMatch) rating = parseFloat(ratingMatch[1]);
+
+      let eta = null;
+      const etaMatch = text.match(/(\d+[\s–\-]+\d+\s*min|\d+\s*min)/i);
+      if (etaMatch) eta = etaMatch[1];
+
+      console.log(`[DoorDash] ${card.name} | fee: ${deliveryFee} | rating: ${rating} | eta: ${eta}`);
+
+      // Step 4: Get item price from store page
       let itemPrice = null;
-
       if (card.href) {
         try {
-          const storeUrl = card.href.startsWith('http') ? card.href : `https://www.doordash.com${card.href}`;
+          const storeUrl = `https://www.doordash.com${card.href}`;
           const storePage = await context.newPage();
-          await storePage.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
-          await storePage.waitForTimeout(2000);
+          await storePage.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
+          await storePage.waitForTimeout(3000);
 
-          const menuItems = await storePage.$$eval(
-            '[data-anchor-id="MenuItem"], [class*="MenuItem"]',
-            (items, searchDish) => {
-              const lowerDish = searchDish.toLowerCase();
-              return items.map(item => {
-                const name = item.querySelector('[data-anchor-id="MenuItemName"], [class*="name"]')?.innerText?.trim();
-                const price = item.querySelector('[data-anchor-id="MenuItemPrice"], [class*="price"]')?.innerText?.trim();
-                return { name, price };
-              }).filter(i => i.name && i.price && i.name.toLowerCase().includes(lowerDish.split(' ')[0]));
-            },
-            dish
-          ).catch(() => []);
+          const priceData = await storePage.evaluate((searchDish) => {
+            const dishLower = searchDish.toLowerCase();
+            const allText = document.body.innerText;
+            const lines = allText.split('\n').map(l => l.trim()).filter(l => l);
+            const matches = [];
+            for (let i = 0; i < lines.length; i++) {
+              if (lines[i].toLowerCase().includes(dishLower)) {
+                // Look at surrounding lines for a price
+                const window = lines.slice(Math.max(0, i-1), i+4).join(' ');
+                const priceMatch = window.match(/\$(\d+\.\d{2})/);
+                if (priceMatch) matches.push({ context: window.substring(0, 80), price: priceMatch[1] });
+              }
+            }
+            return matches.slice(0, 3);
+          }, dish);
 
-          if (menuItems.length > 0) {
-            itemPrice = parsePrice(menuItems[0].price);
-            console.log(`[DoorDash] ${card.name}: ${menuItems[0].name} = ${menuItems[0].price}`);
+          if (priceData.length > 0) {
+            itemPrice = parseFloat(priceData[0].price);
+            console.log(`[DoorDash] ${card.name} price: $${itemPrice} | ctx: ${priceData[0].context}`);
           }
           await storePage.close();
         } catch(e) {
@@ -122,43 +120,16 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
       }
 
       const total = (itemPrice != null && deliveryFee != null) ? parseFloat((itemPrice + deliveryFee).toFixed(2)) : null;
-
-      results.push({
-        platform: 'DoorDash',
-        restaurant: card.name,
-        item: dish,
-        itemPrice,
-        deliveryFee,
-        totalPrice: total,
-        rating: parseRating(card.rating),
-        eta: card.deliveryTime || null,
-        url: page.url()
-      });
+      results.push({ platform: 'DoorDash', restaurant: card.name, item: dish, itemPrice, deliveryFee, totalPrice: total, rating, eta, url: page.url() });
     }
 
+    console.log(`[DoorDash] Final results: ${results.length}`);
   } catch (err) {
     console.error('[DoorDash] Scrape error:', err.message.split('\n')[0]);
   } finally {
     await browser.close();
   }
   return results;
-}
-
-function parsePrice(str) {
-  if (!str) return null;
-  const match = str.match(/\$?([\d.]+)/);
-  return match ? parseFloat(match[1]) : null;
-}
-function parseDeliveryFee(str) {
-  if (!str) return null;
-  if (str.toLowerCase().includes('free')) return 0;
-  const match = str.match(/\$?([\d.]+)/);
-  return match ? parseFloat(match[1]) : null;
-}
-function parseRating(str) {
-  if (!str) return null;
-  const match = str.match(/([\d.]+)/);
-  return match ? parseFloat(match[1]) : null;
 }
 
 module.exports = { scrapeDoorDash };
