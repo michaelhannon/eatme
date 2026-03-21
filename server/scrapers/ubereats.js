@@ -20,41 +20,6 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
   const page = await context.newPage();
   const results = [];
 
-  // INTERCEPT API responses — faster and more reliable than HTML scraping
-  const interceptedStores = [];
-  const interceptedMenus = {};
-
-  page.on('response', async (response) => {
-    const url = response.url();
-    try {
-      if (url.includes('getFeedV1') || url.includes('getSearchFeedV1') || url.includes('getFeed')) {
-        const json = await response.json().catch(() => null);
-        if (json?.data?.feedItems) {
-          json.data.feedItems.forEach(item => {
-            if (item?.store) {
-              interceptedStores.push({
-                name: item.store.title?.text || item.store.name,
-                uuid: item.store.storeUuid || item.store.uuid,
-                rating: item.store.rating?.text,
-                deliveryFee: item.store.fareInfo?.deliveryFee?.unitAmount,
-                eta: item.store.fareInfo?.deliveryTime || item.store.etaRange?.text,
-                href: item.store.actionUrl
-              });
-            }
-          });
-          console.log(`[UberEats] Intercepted feed: ${interceptedStores.length} stores`);
-        }
-      }
-      if (url.includes('getStoreV1') || url.includes('menu') && url.includes('uber')) {
-        const json = await response.json().catch(() => null);
-        if (json?.data?.catalogSectionsMap || json?.data?.sections) {
-          const storeId = url.match(/[a-f0-9-]{36}/)?.[0];
-          if (storeId) interceptedMenus[storeId] = json;
-        }
-      }
-    } catch(e) {}
-  });
-
   try {
     // Step 1: Set address
     console.log(`[UberEats] Setting address...`);
@@ -77,151 +42,202 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
       if (confirmBtn) { await confirmBtn.click({ force: true }); await page.waitForTimeout(800); }
     }
 
-    // Step 2: Search — this triggers the API calls we intercept
+    // Step 2: Search
     await page.goto(`https://www.ubereats.com/search?q=${encodeURIComponent(dish)}`, { waitUntil: 'domcontentloaded', timeout });
-    await page.waitForTimeout(4000);
-    console.log(`[UberEats] Search URL: ${page.url()}`);
-    console.log(`[UberEats] Intercepted ${interceptedStores.length} stores from API`);
+    await page.waitForTimeout(3500);
 
-    // Step 3: If API interception worked, use that data
-    if (interceptedStores.length > 0) {
-      const topStores = interceptedStores.slice(0, 8);
+    // Step 3: Get store cards from HTML — delivery fee is rendered in the card text
+    await page.waitForSelector('[data-testid="store-card"], a[href*="/store/"]', { timeout: 12000 }).catch(() => {});
 
-      // Visit each store page in parallel to intercept menu API calls
-      const menuPromises = topStores.map(async (store) => {
-        if (!store.href && !store.uuid) return [];
-        try {
-          const storeUrl = store.href
-            ? (store.href.startsWith('http') ? store.href : `https://www.ubereats.com${store.href}`)
-            : `https://www.ubereats.com/store/${store.uuid}`;
+    const rawCards = await page.evaluate(() => {
+      const seen = new Set();
+      const out = [];
+      // Use data-testid cards first as they have the most complete info
+      const cards = document.querySelectorAll('[data-testid="store-card"]');
+      for (const card of cards) {
+        const link = card.querySelector('a[href*="/store/"]');
+        const href = link?.getAttribute('href');
+        if (!href || seen.has(href)) continue;
+        seen.add(href);
 
-          const storePage = await context.newPage();
-          const storeMenuItems = [];
+        // Get full text content
+        const text = card.innerText || '';
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-          storePage.on('response', async (response) => {
-            const url = response.url();
-            if (url.includes('getStoreV1') || (url.includes('/api/') && url.includes('menu'))) {
-              try {
-                const json = await response.json().catch(() => null);
-                if (json?.data) {
-                  // Parse catalog sections
-                  const sections = json.data.catalogSectionsMap || json.data.sections || {};
-                  Object.values(sections).forEach(section => {
-                    const items = section.itemsBySubsection?.[0]?.catalogItems || section.items || [];
-                    items.forEach(item => {
-                      const name = item.title || item.name;
-                      const price = item.price ? item.price / 100 : null;
-                      const dishWords = dish.toLowerCase().split(' ').filter(w => w.length > 2);
-                      if (name && price && dishWords.some(w => name.toLowerCase().includes(w))) {
-                        storeMenuItems.push({ name, price });
-                      }
-                    });
-                  });
-                }
-              } catch(e) {}
-            }
-          });
+        // Name is usually the first substantial line
+        const name = lines[0];
 
-          await storePage.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
-          await storePage.waitForTimeout(3000);
-
-          // Fallback to text parsing if API didn't give us items
-          if (storeMenuItems.length === 0) {
-            const items = await storePage.evaluate((searchDish) => {
-              const dishWords = searchDish.toLowerCase().split(' ').filter(w => w.length > 2);
-              const results = [];
-              const lines = document.body.innerText.split('\n').map(l => l.trim()).filter(l => l);
-              for (let i = 0; i < lines.length - 1; i++) {
-                const hasMatch = dishWords.some(w => lines[i].toLowerCase().includes(w));
-                if (!hasMatch) continue;
-                // Price must be on its own line immediately after (not embedded in text)
-                for (let j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
-                  const m = lines[j].match(/^\$(\d+\.\d{2})$/) || lines[j].match(/^\$(\d+)$/);
-                  if (m) {
-                    const price = parseFloat(m[1]);
-                    if (price > 1 && price < 100) {
-                      results.push({ name: lines[i].substring(0, 60), price });
-                      break;
-                    }
-                  }
-                }
-              }
-              const seen = new Set();
-              return results.filter(r => {
-                const key = `${r.name}|${r.price}`;
-                if (seen.has(key)) return false;
-                seen.add(key); return true;
-              }).slice(0, 5);
-            }, dish);
-            storeMenuItems.push(...items);
+        // Find delivery fee - look for patterns like "$0.99 Delivery Fee", "Free Delivery"
+        let deliveryFeeText = null;
+        for (const line of lines) {
+          if (/delivery fee/i.test(line) || /free delivery/i.test(line)) {
+            deliveryFeeText = line;
+            break;
           }
-
-          await storePage.close();
-          console.log(`[UberEats] ${store.name}: ${storeMenuItems.length} items`);
-          return storeMenuItems;
-        } catch(e) {
-          console.log(`[UberEats] Store page failed for ${store.name}: ${e.message.split('\n')[0]}`);
-          return [];
         }
-      });
 
-      const allMenuItems = await Promise.all(menuPromises);
+        // Find ETA - look for patterns like "20–30 min", "25 min"  
+        let etaText = null;
+        for (const line of lines) {
+          if (/\d+\s*(?:–|-)\s*\d+\s*min|\d+\s*min/i.test(line)) {
+            etaText = line;
+            break;
+          }
+        }
 
-      topStores.forEach((store, i) => {
-        const items = allMenuItems[i];
-        const deliveryFee = store.deliveryFee != null ? store.deliveryFee / 100 : null;
-        const rating = store.rating ? parseFloat(store.rating) : null;
-        const eta = store.eta;
+        // Find rating - look for patterns like "4.6 (500+)"
+        let ratingText = null;
+        for (const line of lines) {
+          if (/^[45]\.\d/.test(line)) {
+            ratingText = line;
+            break;
+          }
+        }
 
-        if (items.length > 0) {
-          items.forEach(item => {
-            const total = deliveryFee != null ? parseFloat((item.price + deliveryFee).toFixed(2)) : null;
-            results.push({ platform: 'Uber Eats', restaurant: store.name, item: item.name, itemPrice: item.price, deliveryFee, totalPrice: total, rating, eta, url: page.url() });
-          });
+        console.log(`Card: ${name} | fee: ${deliveryFeeText} | eta: ${etaText} | rating: ${ratingText}`);
+        out.push({ text, href, name, deliveryFeeText, etaText, ratingText, lines: lines.slice(0, 10) });
+        if (out.length >= 8) break;
+      }
+      return out;
+    });
+
+    console.log(`[UberEats] Found ${rawCards.length} store cards`);
+    if (rawCards.length > 0) {
+      console.log(`[UberEats] Sample card lines: ${JSON.stringify(rawCards[0].lines)}`);
+    }
+
+    // Parse delivery fee, eta, rating from card text
+    const storeData = rawCards.map(card => {
+      // Delivery fee
+      let deliveryFee = null;
+      if (card.deliveryFeeText) {
+        if (/free/i.test(card.deliveryFeeText)) {
+          deliveryFee = 0;
         } else {
-          results.push({ platform: 'Uber Eats', restaurant: store.name, item: dish, itemPrice: null, deliveryFee, totalPrice: null, rating, eta, url: page.url() });
-        }
-      });
-
-    } else {
-      // Fallback: HTML scraping if API interception didn't work
-      console.log('[UberEats] API interception failed, falling back to HTML scraping...');
-      const rawCards = await page.evaluate(() => {
-        const seen = new Set();
-        const out = [];
-        const cards = document.querySelectorAll('[data-testid="store-card"], a[href*="/store/"]');
-        for (const card of cards) {
-          const href = card.tagName === 'A' ? card.getAttribute('href') : card.querySelector('a[href*="/store/"]')?.getAttribute('href');
-          if (!href || seen.has(href)) continue;
-          seen.add(href);
-          const text = card.innerText || '';
-          const nameEl = card.querySelector('h3, h4, [data-testid="store-name"]');
-          const name = nameEl?.innerText?.trim() || text.split('\n').find(l => l.trim().length > 2 && !l.includes('$'));
-          if (name && name.trim().length > 2) {
-            out.push({ text, href, name: name.trim() });
-            if (out.length >= 8) break;
-          }
-        }
-        return out;
-      });
-
-      rawCards.forEach(card => {
-        const text = card.text;
-        let deliveryFee = /free delivery/i.test(text) ? 0 : null;
-        if (deliveryFee === null) {
-          const m = text.match(/\$(\d+\.?\d*)\s*(?:delivery fee|delivery)/i);
+          const m = card.deliveryFeeText.match(/\$(\d+\.?\d*)/);
           if (m) deliveryFee = parseFloat(m[1]);
         }
-        const ratingM = text.match(/\b([45]\.\d)\b/);
-        const etaM = text.match(/(\d+[\s–\-]+\d+\s*min|\d+\s*min)/i);
-        results.push({
-          platform: 'Uber Eats', restaurant: card.name, item: dish,
-          itemPrice: null, deliveryFee, totalPrice: null,
-          rating: ratingM ? parseFloat(ratingM[1]) : null,
-          eta: etaM ? etaM[1] : null, url: page.url()
+      }
+
+      // ETA
+      let eta = null;
+      if (card.etaText) {
+        const m = card.etaText.match(/(\d+[\s–\-]+\d+\s*min|\d+\s*min)/i);
+        if (m) eta = m[1].trim();
+      }
+
+      // Rating
+      let rating = null;
+      if (card.ratingText) {
+        const m = card.ratingText.match(/([45]\.\d)/);
+        if (m) rating = parseFloat(m[1]);
+      }
+
+      // Also try to extract from full text as fallback
+      if (deliveryFee === null) {
+        if (/free delivery/i.test(card.text)) deliveryFee = 0;
+        else {
+          const m = card.text.match(/\$(\d+\.?\d*)\s*delivery fee/i);
+          if (m) deliveryFee = parseFloat(m[1]);
+        }
+      }
+      if (eta === null) {
+        const m = card.text.match(/(\d+[\s–\-]+\d+\s*min|\d+\s*min)/i);
+        if (m) eta = m[1].trim();
+      }
+      if (rating === null) {
+        const m = card.text.match(/\b([45]\.\d)\b/);
+        if (m) rating = parseFloat(m[1]);
+      }
+
+      return { name: card.name, href: card.href, deliveryFee, eta, rating };
+    });
+
+    // Step 4: Get item prices in parallel
+    const itemPromises = storeData.map(async (store) => {
+      if (!store.href) return [];
+      try {
+        const storeUrl = store.href.startsWith('http') ? store.href : `https://www.ubereats.com${store.href}`;
+        const storePage = await context.newPage();
+        await storePage.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
+        await storePage.waitForTimeout(2500);
+
+        const items = await storePage.evaluate((searchDish) => {
+          const dishWords = searchDish.toLowerCase().split(' ').filter(w => w.length > 2);
+          const results = [];
+          const lines = document.body.innerText.split('\n').map(l => l.trim()).filter(l => l);
+
+          for (let i = 0; i < lines.length - 1; i++) {
+            if (!dishWords.some(w => lines[i].toLowerCase().includes(w))) continue;
+            // Skip lines that are clearly descriptions/promo text (too long)
+            if (lines[i].length > 80) continue;
+            // Look for price on next 1-3 lines
+            for (let j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
+              // Price must be standalone like "$12.99" not embedded in text
+              const m = lines[j].match(/^\$(\d+\.\d{2})$/) || lines[j].match(/^\$(\d+)$/);
+              if (m) {
+                const price = parseFloat(m[1]);
+                if (price > 1 && price < 150) {
+                  results.push({ name: lines[i].substring(0, 70), price });
+                  break;
+                }
+              }
+            }
+          }
+
+          // Dedup
+          const seen = new Set();
+          return results.filter(r => {
+            const key = `${r.name}|${r.price}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          }).slice(0, 4);
+        }, dish);
+
+        await storePage.close();
+        console.log(`[UberEats] ${store.name}: ${items.length} items, fee: ${store.deliveryFee}, eta: ${store.eta}`);
+        return items;
+      } catch(e) {
+        console.log(`[UberEats] Store failed ${store.name}: ${e.message.split('\n')[0]}`);
+        return [];
+      }
+    });
+
+    const allItems = await Promise.all(itemPromises);
+
+    storeData.forEach((store, i) => {
+      const items = allItems[i];
+      if (items.length > 0) {
+        items.forEach(item => {
+          const total = store.deliveryFee != null ? parseFloat((item.price + store.deliveryFee).toFixed(2)) : null;
+          results.push({
+            platform: 'Uber Eats',
+            restaurant: store.name,
+            item: item.name,
+            itemPrice: item.price,
+            deliveryFee: store.deliveryFee,
+            totalPrice: total,
+            rating: store.rating,
+            eta: store.eta,
+            url: `https://www.ubereats.com${store.href}`
+          });
         });
-      });
-    }
+      } else {
+        // Always include restaurant even without item price
+        results.push({
+          platform: 'Uber Eats',
+          restaurant: store.name,
+          item: dish,
+          itemPrice: null,
+          deliveryFee: store.deliveryFee,
+          totalPrice: null,
+          rating: store.rating,
+          eta: store.eta,
+          url: `https://www.ubereats.com${store.href}`
+        });
+      }
+    });
 
     console.log(`[UberEats] Done: ${results.length} results`);
   } catch (err) {
