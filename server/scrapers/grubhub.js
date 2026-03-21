@@ -18,7 +18,31 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
 
   const page = await context.newPage();
   const results = [];
+  const interceptedRestaurants = [];
   const baseUrl = platform === 'Seamless' ? 'https://www.seamless.com' : 'https://www.grubhub.com';
+
+  // Intercept GrubHub's REST API
+  page.on('response', async (response) => {
+    const url = response.url();
+    try {
+      if (url.includes('api-gtm.grubhub.com/restaurants/search') || url.includes('api-gtm.seamless.com/restaurants/search')) {
+        const json = await response.json().catch(() => null);
+        if (json?.search_result?.results) {
+          json.search_result.results.forEach(r => {
+            interceptedRestaurants.push({
+              name: r.name,
+              id: r.restaurant_id,
+              rating: r.ratings?.actual_rating_value,
+              deliveryFee: r.delivery_fee,
+              eta: r.estimated_delivery_time,
+              href: `/restaurant/${r.name?.toLowerCase().replace(/\s+/g, '-')}/${r.restaurant_id}/`
+            });
+          });
+          console.log(`[${platform}] API intercepted: ${interceptedRestaurants.length} restaurants`);
+        }
+      }
+    } catch(e) {}
+  });
 
   try {
     console.log(`[${platform}] Setting address...`);
@@ -38,101 +62,127 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
       else { await page.keyboard.press('ArrowDown'); await page.waitForTimeout(200); await page.keyboard.press('Enter'); }
       await page.waitForTimeout(2000);
       console.log(`[${platform}] URL after address: ${page.url()}`);
+    } else {
+      console.log(`[${platform}] No address input found`);
     }
 
     await page.goto(`${baseUrl}/food-delivery/search?queryText=${encodeURIComponent(dish)}`, { waitUntil: 'domcontentloaded', timeout });
-    await page.waitForTimeout(3500);
+    await page.waitForTimeout(4000);
     console.log(`[${platform}] Search URL: ${page.url()}`);
-    const preview = await page.evaluate(() => document.body.innerText.substring(0, 300));
-    console.log(`[${platform}] Preview: ${preview}`);
+    console.log(`[${platform}] Intercepted ${interceptedRestaurants.length} restaurants from API`);
 
-    await page.waitForSelector('a[href*="/restaurant/"], [class*="restaurant-card"]', { timeout: 12000 }).catch(() => {});
+    let storeData = [];
 
-    const rawCards = await page.evaluate(() => {
-      const seen = new Set();
-      const out = [];
-      const cards = document.querySelectorAll('a[href*="/restaurant/"], [class*="restaurant-card"], [class*="RestaurantCard"]');
-      for (const card of cards) {
-        const href = card.tagName === 'A' ? card.getAttribute('href') : card.querySelector('a')?.getAttribute('href');
-        if (!href || seen.has(href)) continue;
-        seen.add(href);
-        const text = card.innerText || '';
-        const nameEl = card.querySelector('h3, h4, [class*="name"]');
-        const name = nameEl?.innerText?.trim() || text.split('\n').find(l => l.trim().length > 2 && !l.includes('$'));
-        if (name && name.trim().length > 2) {
-          out.push({ text, href, name: name.trim() });
-          if (out.length >= 8) break;
+    if (interceptedRestaurants.length > 0) {
+      storeData = interceptedRestaurants.slice(0, 8).map(r => ({
+        name: r.name,
+        href: r.href,
+        deliveryFee: r.deliveryFee != null ? r.deliveryFee / 100 : null,
+        rating: r.rating ? parseFloat(r.rating) : null,
+        eta: r.eta ? `${r.eta} min` : null
+      }));
+    } else {
+      // HTML fallback
+      console.log(`[${platform}] Using HTML fallback...`);
+      const preview = await page.evaluate(() => document.body.innerText.substring(0, 400));
+      console.log(`[${platform}] Page preview: ${preview}`);
+
+      const rawCards = await page.evaluate(() => {
+        const seen = new Set();
+        const out = [];
+        const selectors = ['a[href*="/restaurant/"]', '[class*="restaurant-card"]', '[class*="RestaurantCard"]'];
+        for (const sel of selectors) {
+          const cards = document.querySelectorAll(sel);
+          for (const card of cards) {
+            const href = card.tagName === 'A' ? card.getAttribute('href') : card.querySelector('a')?.getAttribute('href');
+            if (!href || seen.has(href)) continue;
+            seen.add(href);
+            const text = card.innerText || '';
+            const nameEl = card.querySelector('h3, h4, [class*="name"]');
+            const name = nameEl?.innerText?.trim() || text.split('\n').find(l => l.trim().length > 2 && !l.includes('$'));
+            if (name && name.trim().length > 2) {
+              out.push({ text, href, name: name.trim() });
+              if (out.length >= 8) break;
+            }
+          }
+          if (out.length > 0) break;
         }
-      }
-      return out;
-    });
+        return out;
+      });
 
-    console.log(`[${platform}] Found ${rawCards.length} restaurants`);
+      storeData = rawCards.map(card => {
+        const text = card.text;
+        let deliveryFee = /free/i.test(text) ? 0 : null;
+        if (deliveryFee === null) {
+          const m = text.match(/\$(\d+\.?\d*)\s*(?:delivery fee|delivery)/i);
+          if (m) deliveryFee = parseFloat(m[1]);
+        }
+        const ratingM = text.match(/\b([45]\.\d)\b/);
+        const etaM = text.match(/(\d+[\s–\-]+\d+\s*min|\d+\s*min)/i);
+        return { name: card.name, href: card.href, deliveryFee, rating: ratingM ? parseFloat(ratingM[1]) : null, eta: etaM ? etaM[1] : null };
+      });
+    }
 
-    const storeData = rawCards.map(card => {
-      const text = card.text;
-      let deliveryFee = /free/i.test(text) ? 0 : null;
-      if (deliveryFee === null) {
-        const m = text.match(/\$(\d+\.?\d*)\s*(?:delivery fee|delivery)/i);
-        if (m) deliveryFee = parseFloat(m[1]);
-      }
-      const ratingM = text.match(/\b([45]\.\d)\b/);
-      const etaM = text.match(/(\d+[\s–\-]+\d+\s*min|\d+\s*min)/i);
-      return { ...card, deliveryFee, rating: ratingM ? parseFloat(ratingM[1]) : null, eta: etaM ? etaM[1] : null };
-    });
+    console.log(`[${platform}] Processing ${storeData.length} stores...`);
 
     const itemPromises = storeData.map(async (store) => {
       if (!store.href) return [];
       try {
         const storeUrl = store.href.startsWith('http') ? store.href : `${baseUrl}${store.href}`;
         const storePage = await context.newPage();
+        const menuItems = [];
+
+        // Intercept GrubHub menu API
+        storePage.on('response', async (response) => {
+          const url = response.url();
+          if (url.includes('/api/') && (url.includes('menu') || url.includes('restaurant'))) {
+            try {
+              const json = await response.json().catch(() => null);
+              if (json?.restaurant?.menu_category_list) {
+                const dishWords = dish.toLowerCase().split(' ').filter(w => w.length > 2);
+                json.restaurant.menu_category_list.forEach(cat => {
+                  (cat.menu_item_list || []).forEach(item => {
+                    const name = item.name;
+                    const price = item.price != null ? item.price / 100 : null;
+                    if (name && price && dishWords.some(w => name.toLowerCase().includes(w))) {
+                      menuItems.push({ name, price });
+                    }
+                  });
+                });
+              }
+            } catch(e) {}
+          }
+        });
+
         await storePage.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
-        await storePage.waitForTimeout(2500);
+        await storePage.waitForTimeout(3000);
 
-        const items = await storePage.evaluate((searchDish) => {
-          const dishWords = searchDish.toLowerCase().split(' ').filter(w => w.length > 2);
-          const results = [];
-
-          const menuEls = document.querySelectorAll('[class*="menuItem"], [class*="MenuItem"], [data-testid="menu-item"]');
-          menuEls.forEach(el => {
-            const text = el.innerText || '';
-            const hasMatch = dishWords.some(w => text.toLowerCase().includes(w));
-            if (!hasMatch) return;
-            const lines = text.split('\n').map(l => l.trim()).filter(l => l);
-            const name = lines.find(l => l.length > 2 && !l.match(/^\$/));
-            const priceLine = lines.find(l => l.match(/^\$\d+\.\d{2}$/) || l.match(/^\$\d+$/));
-            const price = priceLine ? parseFloat(priceLine.replace('$', '')) : null;
-            if (name && price && price > 1 && price < 100) results.push({ name, price });
-          });
-
-          if (results.length === 0) {
+        if (menuItems.length === 0) {
+          const items = await storePage.evaluate((searchDish) => {
+            const dishWords = searchDish.toLowerCase().split(' ').filter(w => w.length > 2);
+            const results = [];
             const lines = document.body.innerText.split('\n').map(l => l.trim()).filter(l => l);
             for (let i = 0; i < lines.length - 1; i++) {
-              const hasMatch = dishWords.some(w => lines[i].toLowerCase().includes(w));
-              if (!hasMatch) continue;
+              if (!dishWords.some(w => lines[i].toLowerCase().includes(w))) continue;
               for (let j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
                 const m = lines[j].match(/^\$(\d+\.\d{2})$/) || lines[j].match(/^\$(\d+)$/);
                 if (m) {
                   const price = parseFloat(m[1]);
-                  if (price > 1 && price < 100) { results.push({ name: lines[i], price }); break; }
+                  if (price > 1 && price < 100) { results.push({ name: lines[i].substring(0, 60), price }); break; }
                 }
               }
             }
-          }
-
-          const seen = new Set();
-          return results.filter(r => {
-            const key = `${r.name}|${r.price}`;
-            if (seen.has(key)) return false;
-            seen.add(key); return true;
-          }).slice(0, 5);
-        }, dish);
+            const seen = new Set();
+            return results.filter(r => { const k = `${r.name}|${r.price}`; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 5);
+          }, dish);
+          menuItems.push(...items);
+        }
 
         await storePage.close();
-        console.log(`[${platform}] ${store.name}: ${items.length} items`);
-        return items;
+        console.log(`[${platform}] ${store.name}: ${menuItems.length} items`);
+        return menuItems;
       } catch(e) {
-        console.log(`[${platform}] Item fetch failed for ${store.name}: ${e.message.split('\n')[0]}`);
+        console.log(`[${platform}] Store failed ${store.name}: ${e.message.split('\n')[0]}`);
         return [];
       }
     });

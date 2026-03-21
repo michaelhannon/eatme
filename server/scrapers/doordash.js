@@ -18,8 +18,35 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
 
   const page = await context.newPage();
   const results = [];
+  const interceptedStores = [];
+
+  // Intercept DoorDash's internal API calls
+  page.on('response', async (response) => {
+    const url = response.url();
+    try {
+      // DoorDash search API
+      if (url.includes('search/store') && url.includes('doordash.com/graphql')) {
+        const json = await response.json().catch(() => null);
+        if (json?.data?.searchStore?.stores) {
+          json.data.searchStore.stores.forEach(store => {
+            interceptedStores.push({
+              name: store.name,
+              id: store.id,
+              slug: store.url,
+              rating: store.averageRating,
+              deliveryFee: store.deliveryFee,
+              eta: store.displayDeliveryTime,
+              href: `/store/${store.url}--${store.id}/`
+            });
+          });
+          console.log(`[DoorDash] API intercepted: ${interceptedStores.length} stores`);
+        }
+      }
+    } catch(e) {}
+  });
 
   try {
+    // Step 1: Set address
     console.log(`[DoorDash] Setting address...`);
     await page.goto('https://www.doordash.com', { waitUntil: 'domcontentloaded', timeout });
     await page.waitForTimeout(2000);
@@ -37,101 +64,127 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
       else { await page.keyboard.press('ArrowDown'); await page.waitForTimeout(200); await page.keyboard.press('Enter'); }
       await page.waitForTimeout(2000);
       console.log(`[DoorDash] URL after address: ${page.url()}`);
+    } else {
+      console.log('[DoorDash] No address input found');
     }
 
+    // Step 2: Search (triggers API calls)
     await page.goto(`https://www.doordash.com/search/store/${encodeURIComponent(dish)}/`, { waitUntil: 'domcontentloaded', timeout });
-    await page.waitForTimeout(3500);
+    await page.waitForTimeout(4000);
     console.log(`[DoorDash] Search URL: ${page.url()}`);
+    console.log(`[DoorDash] Intercepted ${interceptedStores.length} stores from API`);
 
-    await page.waitForSelector('a[href*="/store/"]', { timeout: 12000 }).catch(() => {});
+    // Step 3: Get store cards (from API interception or HTML fallback)
+    let storeData = [];
 
-    const rawCards = await page.evaluate(() => {
-      const seen = new Set();
-      const out = [];
-      const cards = document.querySelectorAll('a[href*="/store/"]');
-      for (const card of cards) {
-        const href = card.getAttribute('href');
-        if (!href || seen.has(href)) continue;
-        seen.add(href);
-        const text = card.innerText || '';
-        const nameEl = card.querySelector('h3, h4, [data-anchor-id*="Name"]');
-        const name = nameEl?.innerText?.trim() || text.split('\n').find(l => l.trim().length > 2 && !l.includes('$'));
-        if (name && name.trim().length > 2) {
-          out.push({ text, href, name: name.trim() });
-          if (out.length >= 8) break;
+    if (interceptedStores.length > 0) {
+      storeData = interceptedStores.slice(0, 8).map(s => ({
+        name: s.name,
+        href: s.href,
+        deliveryFee: s.deliveryFee != null ? s.deliveryFee / 100 : null,
+        rating: s.rating ? parseFloat(s.rating) : null,
+        eta: s.eta ? `${s.eta} min` : null
+      }));
+    } else {
+      // HTML fallback
+      console.log('[DoorDash] Using HTML fallback...');
+      const rawCards = await page.evaluate(() => {
+        const seen = new Set();
+        const out = [];
+        const cards = document.querySelectorAll('a[href*="/store/"]');
+        for (const card of cards) {
+          const href = card.getAttribute('href');
+          if (!href || seen.has(href)) continue;
+          seen.add(href);
+          const text = card.innerText || '';
+          const nameEl = card.querySelector('h3, h4, [data-anchor-id*="Name"]');
+          const name = nameEl?.innerText?.trim() || text.split('\n').find(l => l.trim().length > 2 && !l.includes('$'));
+          if (name && name.trim().length > 2) {
+            out.push({ text, href, name: name.trim() });
+            if (out.length >= 8) break;
+          }
         }
-      }
-      return out;
-    });
+        return out;
+      });
 
-    console.log(`[DoorDash] Found ${rawCards.length} stores`);
+      storeData = rawCards.map(card => {
+        const text = card.text;
+        let deliveryFee = /free/i.test(text) ? 0 : null;
+        if (deliveryFee === null) {
+          const m = text.match(/\$(\d+\.?\d*)\s*(?:delivery fee|delivery)/i);
+          if (m) deliveryFee = parseFloat(m[1]);
+        }
+        const ratingM = text.match(/\b([45]\.\d)\b/);
+        const etaM = text.match(/(\d+[\s–\-]+\d+\s*min|\d+\s*min)/i);
+        return { name: card.name, href: card.href, deliveryFee, rating: ratingM ? parseFloat(ratingM[1]) : null, eta: etaM ? etaM[1] : null };
+      });
+    }
 
-    const storeData = rawCards.map(card => {
-      const text = card.text;
-      let deliveryFee = /free/i.test(text) ? 0 : null;
-      if (deliveryFee === null) {
-        const m = text.match(/\$(\d+\.?\d*)\s*(?:delivery fee|delivery)/i);
-        if (m) deliveryFee = parseFloat(m[1]);
-      }
-      const ratingM = text.match(/\b([45]\.\d)\b/);
-      const etaM = text.match(/(\d+[\s–\-]+\d+\s*min|\d+\s*min)/i);
-      return { ...card, deliveryFee, rating: ratingM ? parseFloat(ratingM[1]) : null, eta: etaM ? etaM[1] : null };
-    });
+    console.log(`[DoorDash] Processing ${storeData.length} stores for item prices...`);
 
+    // Step 4: Parallel item price fetching
     const itemPromises = storeData.map(async (store) => {
       if (!store.href) return [];
       try {
-        const storeUrl = `https://www.doordash.com${store.href}`;
+        const storeUrl = store.href.startsWith('http') ? store.href : `https://www.doordash.com${store.href}`;
         const storePage = await context.newPage();
+        const menuItems = [];
+
+        // Intercept menu API on store page
+        storePage.on('response', async (response) => {
+          const url = response.url();
+          if (url.includes('getMenu') || url.includes('storeMenu') || (url.includes('doordash.com/graphql') && !url.includes('search'))) {
+            try {
+              const json = await response.json().catch(() => null);
+              if (json?.data?.store?.menus || json?.data?.menus) {
+                const menus = json.data.store?.menus || json.data.menus || [];
+                const dishWords = dish.toLowerCase().split(' ').filter(w => w.length > 2);
+                menus.forEach(menu => {
+                  (menu.menuCategories || []).forEach(cat => {
+                    (cat.items || []).forEach(item => {
+                      const name = item.name || item.itemName;
+                      const price = item.price != null ? item.price / 100 : null;
+                      if (name && price && dishWords.some(w => name.toLowerCase().includes(w))) {
+                        menuItems.push({ name, price });
+                      }
+                    });
+                  });
+                });
+              }
+            } catch(e) {}
+          }
+        });
+
         await storePage.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
-        await storePage.waitForTimeout(2500);
+        await storePage.waitForTimeout(3000);
 
-        const items = await storePage.evaluate((searchDish) => {
-          const dishWords = searchDish.toLowerCase().split(' ').filter(w => w.length > 2);
-          const results = [];
-
-          // DoorDash menu items
-          const menuEls = document.querySelectorAll('[data-anchor-id="MenuItem"], [class*="MenuItem"]');
-          menuEls.forEach(el => {
-            const text = el.innerText || '';
-            const hasMatch = dishWords.some(w => text.toLowerCase().includes(w));
-            if (!hasMatch) return;
-            const lines = text.split('\n').map(l => l.trim()).filter(l => l);
-            const name = lines.find(l => l.length > 2 && !l.match(/^\$/));
-            const priceLine = lines.find(l => l.match(/^\$\d+\.\d{2}$/) || l.match(/^\$\d+$/));
-            const price = priceLine ? parseFloat(priceLine.replace('$', '')) : null;
-            if (name && price && price > 1 && price < 100) results.push({ name, price });
-          });
-
-          // Fallback text parsing
-          if (results.length === 0) {
+        // Text fallback if API interception didn't work
+        if (menuItems.length === 0) {
+          const items = await storePage.evaluate((searchDish) => {
+            const dishWords = searchDish.toLowerCase().split(' ').filter(w => w.length > 2);
+            const results = [];
             const lines = document.body.innerText.split('\n').map(l => l.trim()).filter(l => l);
             for (let i = 0; i < lines.length - 1; i++) {
-              const hasMatch = dishWords.some(w => lines[i].toLowerCase().includes(w));
-              if (!hasMatch) continue;
+              if (!dishWords.some(w => lines[i].toLowerCase().includes(w))) continue;
               for (let j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
                 const m = lines[j].match(/^\$(\d+\.\d{2})$/) || lines[j].match(/^\$(\d+)$/);
                 if (m) {
                   const price = parseFloat(m[1]);
-                  if (price > 1 && price < 100) { results.push({ name: lines[i], price }); break; }
+                  if (price > 1 && price < 100) { results.push({ name: lines[i].substring(0, 60), price }); break; }
                 }
               }
             }
-          }
-
-          const seen = new Set();
-          return results.filter(r => {
-            const key = `${r.name}|${r.price}`;
-            if (seen.has(key)) return false;
-            seen.add(key); return true;
-          }).slice(0, 5);
-        }, dish);
+            const seen = new Set();
+            return results.filter(r => { const k = `${r.name}|${r.price}`; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 5);
+          }, dish);
+          menuItems.push(...items);
+        }
 
         await storePage.close();
-        console.log(`[DoorDash] ${store.name}: ${items.length} items`);
-        return items;
+        console.log(`[DoorDash] ${store.name}: ${menuItems.length} items`);
+        return menuItems;
       } catch(e) {
-        console.log(`[DoorDash] Item fetch failed for ${store.name}: ${e.message.split('\n')[0]}`);
+        console.log(`[DoorDash] Store failed ${store.name}: ${e.message.split('\n')[0]}`);
         return [];
       }
     });
