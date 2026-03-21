@@ -8,13 +8,14 @@ const { scrapeUberEats } = require('./scrapers/ubereats');
 const { aggregate } = require('./aggregator');
 
 const app = express();
+// Railway injects PORT — must use process.env.PORT
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../client')));
 
-// Health check
+// Health check — Railway uses this to confirm the service is up
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -37,70 +38,32 @@ app.post('/api/search', async (req, res) => {
 
   const startTime = Date.now();
 
-  // Credentials from environment
   const creds = {
-    doordash: {
-      email: process.env.DOORDASH_EMAIL,
-      password: process.env.DOORDASH_PASSWORD
-    },
-    grubhub: {
-      email: process.env.GRUBHUB_EMAIL,
-      password: process.env.GRUBHUB_PASSWORD
-    },
-    ubereats: {
-      email: process.env.UBEREATS_EMAIL,
-      password: process.env.UBEREATS_PASSWORD
-    }
+    doordash:  { email: process.env.DOORDASH_EMAIL,  password: process.env.DOORDASH_PASSWORD },
+    grubhub:   { email: process.env.GRUBHUB_EMAIL,   password: process.env.GRUBHUB_PASSWORD },
+    ubereats:  { email: process.env.UBEREATS_EMAIL,   password: process.env.UBEREATS_PASSWORD }
   };
 
   const scraperConfig = {
     address,
     dish,
-    headless: process.env.HEADLESS !== 'false',
-    timeout: parseInt(process.env.SCRAPE_TIMEOUT_MS || '30000')
+    headless: true,   // always headless on Railway
+    timeout: parseInt(process.env.SCRAPE_TIMEOUT_MS || '45000')  // slightly longer for cloud
   };
 
-  // Build platform jobs
   const jobs = [];
+  if (platforms.includes('doordash'))  jobs.push(scrapeDoorDash({ ...scraperConfig, credentials: creds.doordash }).catch(e => { console.error('[DoorDash]', e.message); return []; }));
+  if (platforms.includes('grubhub'))   jobs.push(scrapeGrubHub({ ...scraperConfig, credentials: creds.grubhub }).catch(e => { console.error('[GrubHub]', e.message); return []; }));
+  if (platforms.includes('seamless'))  jobs.push(scrapeSeamless({ ...scraperConfig, credentials: creds.grubhub }).catch(e => { console.error('[Seamless]', e.message); return []; }));
+  if (platforms.includes('ubereats'))  jobs.push(scrapeUberEats({ ...scraperConfig, credentials: creds.ubereats }).catch(e => { console.error('[UberEats]', e.message); return []; }));
 
-  if (platforms.includes('doordash')) {
-    jobs.push(
-      scrapeDoorDash({ ...scraperConfig, credentials: creds.doordash })
-        .catch(err => { console.error('[DoorDash] Failed:', err.message); return []; })
-    );
-  }
-
-  if (platforms.includes('grubhub')) {
-    jobs.push(
-      scrapeGrubHub({ ...scraperConfig, credentials: creds.grubhub })
-        .catch(err => { console.error('[GrubHub] Failed:', err.message); return []; })
-    );
-  }
-
-  if (platforms.includes('seamless')) {
-    jobs.push(
-      scrapeSeamless({ ...scraperConfig, credentials: creds.grubhub }) // Same creds as GrubHub
-        .catch(err => { console.error('[Seamless] Failed:', err.message); return []; })
-    );
-  }
-
-  if (platforms.includes('ubereats')) {
-    jobs.push(
-      scrapeUberEats({ ...scraperConfig, credentials: creds.ubereats })
-        .catch(err => { console.error('[UberEats] Failed:', err.message); return []; })
-    );
-  }
-
-  // Run all scrapers IN PARALLEL
+  // All 4 scrapers run in PARALLEL
   const allRawResults = await Promise.all(jobs);
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
-  console.log(`✅ All scrapers done in ${elapsed}s`);
+  console.log(`✅ Done in ${elapsed}s`);
 
-  // Aggregate and rank
   const { ranked, summary } = aggregate(allRawResults, rankBy);
-
-  console.log(`📊 ${ranked.length} total results ranked by ${rankBy}`);
 
   res.json({
     dish,
@@ -112,13 +75,36 @@ app.post('/api/search', async (req, res) => {
   });
 });
 
-// Serve frontend
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`\n🚀 MenuScraper running on port ${PORT}`);
-  console.log(`   http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n🚀 EatMe running on port ${PORT}`);
   console.log(`   Default address: ${process.env.DEFAULT_ADDRESS || '86 Horsneck Point Rd, Oceanport NJ 07757'}`);
+});
+
+// Diagnostic endpoint - tests platform connectivity + credentials
+app.get('/api/test', async (req, res) => {
+  const { runLoginTests } = require('./loginTest');
+  const creds = {
+    doordash: { email: process.env.DOORDASH_EMAIL, password: process.env.DOORDASH_PASSWORD },
+    grubhub:  { email: process.env.GRUBHUB_EMAIL,  password: process.env.GRUBHUB_PASSWORD },
+    ubereats: { email: process.env.UBEREATS_EMAIL,  password: process.env.UBEREATS_PASSWORD }
+  };
+
+  // Report what creds are configured (mask passwords)
+  const credStatus = {
+    doordash:  { email: creds.doordash.email  || 'NOT SET', passwordSet: !!creds.doordash.password },
+    grubhub:   { email: creds.grubhub.email   || 'NOT SET', passwordSet: !!creds.grubhub.password },
+    ubereats:  { email: creds.ubereats.email  || 'NOT SET', passwordSet: !!creds.ubereats.password }
+  };
+
+  console.log('Running login diagnostics...');
+  try {
+    const results = await runLoginTests(creds);
+    res.json({ credStatus, browserTests: results });
+  } catch (e) {
+    res.json({ credStatus, error: e.message });
+  }
 });
