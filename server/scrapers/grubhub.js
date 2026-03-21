@@ -20,8 +20,6 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
   const results = [];
   const baseUrl = platform === 'Seamless' ? 'https://www.seamless.com' : 'https://www.grubhub.com';
 
-  // Parse city/state from address for URL format
-  // "86 Horsneck Point Rd, Oceanport NJ 07757" -> "nj-oceanport"
   function parseLocationSlug(addr) {
     const m = addr.match(/,\s*([^,]+?)\s+([A-Z]{2})\s+\d{5}/);
     if (!m) return null;
@@ -45,92 +43,67 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
       await addressInput.type(address, { delay: 40 });
       await page.waitForTimeout(1800);
       const suggestion = await page.$('li[role="option"]:first-child, [data-testid="suggestion-item"]:first-child, [class*="autocomplete"] li:first-child');
-      if (suggestion) {
-        await suggestion.click({ force: true });
-      } else {
-        await page.keyboard.press('ArrowDown');
-        await page.waitForTimeout(300);
-        await page.keyboard.press('Enter');
-      }
+      if (suggestion) await suggestion.click({ force: true });
+      else { await page.keyboard.press('ArrowDown'); await page.waitForTimeout(300); await page.keyboard.press('Enter'); }
       await page.waitForTimeout(2500);
       console.log(`[${platform}] After address URL: ${page.url()}`);
     }
 
-    // Step 2: Try the correct GrubHub search URL format: /delivery/[state-city]/[dish]
-    const locationSlug = parseLocationSlug(address);
-    const dishSlug = encodeURIComponent(dish.toLowerCase().replace(/\s+/g, '-'));
-    const encodedDish = encodeURIComponent(dish);
+    // Step 2: Use search bar (we know this works from logs)
+    const searchInput = await page.waitForSelector(
+      'input[placeholder*="Search"], input[placeholder*="search"], input[name="search"], [data-testid="search-input"]',
+      { timeout: 10000 }
+    ).catch(() => null);
 
-    const searchUrls = locationSlug ? [
-      `${baseUrl}/delivery/${locationSlug}/${dishSlug}`,
-      `${baseUrl}/delivery/${locationSlug}/${encodedDish}`,
-      `${baseUrl}/delivery/cuisine/${dishSlug}`,
-    ] : [
-      `${baseUrl}/delivery/cuisine/${dishSlug}`,
-    ];
-
-    let landed = false;
-    for (const url of searchUrls) {
-      console.log(`[${platform}] Trying URL: ${url}`);
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
-      await page.waitForTimeout(3000);
-      const preview = await page.evaluate(() => document.body.innerText.substring(0, 150));
-      console.log(`[${platform}] Preview: ${preview}`);
-      if (!preview.includes("missing") && !preview.includes("hamburger") && !preview.includes("doesn't exist") && !preview.includes("secret")) {
-        landed = true;
-        console.log(`[${platform}] Found working URL: ${url}`);
-        break;
-      }
+    if (searchInput) {
+      console.log(`[${platform}] Using search bar...`);
+      await searchInput.click({ force: true });
+      await searchInput.fill(dish);
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(4000);
+      console.log(`[${platform}] Search URL: ${page.url()}`);
     }
 
-    // Step 3: If URL approach failed, use search bar on lets-eat page
-    if (!landed) {
-      console.log(`[${platform}] URL approach failed, using search bar...`);
-      await page.goto(`${baseUrl}/lets-eat`, { waitUntil: 'domcontentloaded', timeout });
-      await page.waitForTimeout(2000);
+    // Wait for results
+    await page.waitForTimeout(2000);
+    const preview = await page.evaluate(() => document.body.innerText.substring(0, 200));
+    console.log(`[${platform}] Preview: ${preview.substring(0, 150)}`);
 
-      const searchInput = await page.waitForSelector(
-        'input[placeholder*="Search"], input[placeholder*="search"], input[name="search"], [data-testid="search-input"], input[type="search"]',
-        { timeout: 10000 }
-      ).catch(() => null);
-
-      if (searchInput) {
-        console.log(`[${platform}] Found search bar, typing dish...`);
-        await searchInput.click({ force: true });
-        await searchInput.fill(dish);
-        await page.keyboard.press('Enter');
-        await page.waitForTimeout(4000);
-        console.log(`[${platform}] After search URL: ${page.url()}`);
-      } else {
-        // Last resort: GrubHub has a /find-restaurants endpoint
-        await page.goto(`${baseUrl}/find-restaurants?searchText=${encodedDish}`, { waitUntil: 'domcontentloaded', timeout });
-        await page.waitForTimeout(3000);
-        console.log(`[${platform}] find-restaurants URL: ${page.url()}`);
-      }
-    }
-
-    const finalPreview = await page.evaluate(() => document.body.innerText.substring(0, 300));
-    console.log(`[${platform}] Final page preview: ${finalPreview}`);
-
-    // Step 4: Scrape restaurant cards
-    await page.waitForSelector(
-      'a[href*="/restaurant/"], [class*="restaurant-card"], [class*="RestaurantCard"], [class*="restaurantCard"]',
-      { timeout: 12000 }
-    ).catch(() => console.log(`[${platform}] No restaurant cards found`));
-
+    // Step 3: Scrape restaurant cards
+    // GrubHub/Seamless search results use li elements and various card formats
     const rawCards = await page.evaluate(() => {
       const seen = new Set();
       const out = [];
-      const selectors = ['a[href*="/restaurant/"]', '[class*="restaurant-card"]', '[class*="RestaurantCard"]'];
-      for (const sel of selectors) {
-        const cards = document.querySelectorAll(sel);
-        for (const card of cards) {
-          const href = card.tagName === 'A' ? card.getAttribute('href') : card.querySelector('a')?.getAttribute('href');
+
+      // Try multiple selector strategies
+      const strategies = [
+        // Strategy 1: restaurant links
+        () => document.querySelectorAll('a[href*="/restaurant/"]'),
+        // Strategy 2: list items with restaurant data
+        () => document.querySelectorAll('[class*="restaurantCard"], [class*="restaurant-card"], [class*="RestaurantCard"]'),
+        // Strategy 3: Any li with a restaurant name
+        () => document.querySelectorAll('ul[class*="restaurants"] li, ul[class*="results"] li'),
+        // Strategy 4: search result items
+        () => document.querySelectorAll('[data-testid*="restaurant"], [data-testid*="store"]'),
+      ];
+
+      for (const getElements of strategies) {
+        const els = getElements();
+        if (els.length === 0) continue;
+        console.log('Strategy found', els.length, 'elements');
+
+        for (const el of els) {
+          const href = el.tagName === 'A'
+            ? el.getAttribute('href')
+            : el.querySelector('a')?.getAttribute('href');
+
           if (!href || seen.has(href)) continue;
           seen.add(href);
-          const text = card.innerText || '';
+
+          const text = el.innerText || '';
           const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
           const name = lines[0];
+
           if (name && name.length > 2 && !name.startsWith('$')) {
             out.push({ href, name, text, lines });
             if (out.length >= 8) break;
@@ -138,34 +111,68 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
         }
         if (out.length > 0) break;
       }
+
+      // Last resort: grab all text blocks that look like restaurant names
+      if (out.length === 0) {
+        const allLinks = document.querySelectorAll('a[href]');
+        for (const link of allLinks) {
+          const href = link.getAttribute('href');
+          if (!href || seen.has(href)) continue;
+          if (!href.includes('/restaurant/') && !href.includes('/store/') && !href.includes('/menu/')) continue;
+          seen.add(href);
+          const text = link.innerText || '';
+          const name = text.split('\n')[0]?.trim();
+          if (name && name.length > 2 && !name.startsWith('$')) {
+            out.push({ href, name, text, lines: text.split('\n').map(l=>l.trim()).filter(l=>l) });
+            if (out.length >= 8) break;
+          }
+        }
+      }
+
       return out;
     });
 
     console.log(`[${platform}] Found ${rawCards.length} restaurants`);
-    if (rawCards[0]) console.log(`[${platform}] Sample: ${JSON.stringify(rawCards[0].lines.slice(0,6))}`);
+    if (rawCards[0]) console.log(`[${platform}] Sample lines: ${JSON.stringify(rawCards[0].lines.slice(0,8))}`);
 
     const storeData = rawCards.map(card => {
       const text = card.text;
       let deliveryFee = /free/i.test(text) ? 0 : null;
       if (deliveryFee === null) {
-        const m = text.match(/\$(\d+\.?\d*)\s*(?:delivery fee|delivery)/i);
+        const m = text.match(/\$(\d+\.?\d*)\s*(?:delivery fee|delivery)/i)
+          || text.match(/delivery[:\s]+\$(\d+\.?\d*)/i);
         if (m) deliveryFee = parseFloat(m[1]);
       }
       const ratingM = text.match(/\b([45]\.\d)\b/);
       const etaM = text.match(/(\d+[\s–\-−]+\d+\s*min|\d+\s*min)/i);
-      return { name: card.name, href: card.href, deliveryFee, rating: ratingM ? parseFloat(ratingM[1]) : null, eta: etaM ? etaM[1]?.trim() : null };
+      return {
+        name: card.name,
+        href: card.href,
+        deliveryFee,
+        rating: ratingM ? parseFloat(ratingM[1]) : null,
+        eta: etaM ? etaM[1]?.trim() : null
+      };
     });
 
-    // Step 5: Parallel item price fetching
-    const itemPromises = storeData.map(async (store) => {
-      if (!store.href) return { items: [], deliveryFee: store.deliveryFee };
+    // Step 4: Fetch item prices SEQUENTIALLY to avoid memory crashes
+    // (parallel was crashing Railway - "Target crashed")
+    for (const store of storeData) {
+      if (!store.href) {
+        results.push({ platform, restaurant: store.name, item: dish, itemPrice: null, deliveryFee: store.deliveryFee, totalPrice: null, rating: store.rating, eta: store.eta, url: page.url() });
+        continue;
+      }
+
       try {
         const storeUrl = store.href.startsWith('http') ? store.href : `${baseUrl}${store.href}`;
         const storePage = await context.newPage();
         await storePage.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
         await storePage.waitForTimeout(4000);
-        // Wait for GrubHub menu items to render via JS
-        await storePage.waitForSelector('[class*="menuItem"], [class*="MenuItem"], [class*="menu-item"]', { timeout: 8000 }).catch(() => {});
+
+        // Wait for menu items to render
+        await storePage.waitForSelector(
+          '[class*="menuItem"], [class*="MenuItem"], [class*="menu-item"], [class*="itemInfo"]',
+          { timeout: 8000 }
+        ).catch(() => {});
 
         const data = await storePage.evaluate((searchDish) => {
           const dishWords = searchDish.toLowerCase().split(' ').filter(w => w.length > 2);
@@ -188,39 +195,42 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
               const m = lines[j].match(/^\$(\d+\.\d{2})$/) || lines[j].match(/^\$(\d+)$/);
               if (m) {
                 const price = parseFloat(m[1]);
-                if (price > 1 && price < 150) { items.push({ name: lines[i].substring(0, 70), price }); break; }
+                if (price > 1 && price < 150) {
+                  items.push({ name: lines[i].substring(0, 70), price });
+                  break;
+                }
               }
             }
           }
           const seen = new Set();
           return {
             deliveryFee,
-            items: items.filter(r => { const k = `${r.name}|${r.price}`; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 4)
+            items: items.filter(r => {
+              const k = `${r.name}|${r.price}`;
+              if (seen.has(k)) return false;
+              seen.add(k);
+              return true;
+            }).slice(0, 4)
           };
         }, dish);
 
         await storePage.close();
         console.log(`[${platform}] ${store.name}: ${data.items.length} items, fee: $${data.deliveryFee}`);
-        return data;
+
+        const deliveryFee = data.deliveryFee ?? store.deliveryFee;
+        if (data.items.length > 0) {
+          data.items.forEach(item => {
+            const total = deliveryFee != null ? parseFloat((item.price + deliveryFee).toFixed(2)) : null;
+            results.push({ platform, restaurant: store.name, item: item.name, itemPrice: item.price, deliveryFee, totalPrice: total, rating: store.rating, eta: store.eta, url: page.url() });
+          });
+        } else {
+          results.push({ platform, restaurant: store.name, item: dish, itemPrice: null, deliveryFee, totalPrice: null, rating: store.rating, eta: store.eta, url: page.url() });
+        }
       } catch(e) {
         console.log(`[${platform}] Store failed ${store.name}: ${e.message.split('\n')[0]}`);
-        return { items: [], deliveryFee: store.deliveryFee };
+        results.push({ platform, restaurant: store.name, item: dish, itemPrice: null, deliveryFee: store.deliveryFee, totalPrice: null, rating: store.rating, eta: store.eta, url: page.url() });
       }
-    });
-
-    const allData = await Promise.all(itemPromises);
-
-    storeData.forEach((store, i) => {
-      const { items, deliveryFee } = allData[i];
-      if (items.length > 0) {
-        items.forEach(item => {
-          const total = deliveryFee != null ? parseFloat((item.price + deliveryFee).toFixed(2)) : null;
-          results.push({ platform, restaurant: store.name, item: item.name, itemPrice: item.price, deliveryFee, totalPrice: total, rating: store.rating, eta: store.eta, url: page.url() });
-        });
-      } else {
-        results.push({ platform, restaurant: store.name, item: dish, itemPrice: null, deliveryFee, totalPrice: null, rating: store.rating, eta: store.eta, url: page.url() });
-      }
-    });
+    }
 
     console.log(`[${platform}] Done: ${results.length} results`);
   } catch (err) {
@@ -236,7 +246,3 @@ async function scrapeSeamless(params) {
 }
 
 module.exports = { scrapeGrubHub, scrapeSeamless };
-
-// Note: item price extraction needs longer wait for GrubHub JS rendering
-// This is appended as a reminder — the fix is in the storePage wait time above (2500ms)
-// If still not working, increase to 4000ms and add: await storePage.waitForSelector('[class*="menuItem"], [class*="MenuItem"]', {timeout:8000}).catch(()=>{})
