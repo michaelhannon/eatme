@@ -20,16 +20,8 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
   const results = [];
   const baseUrl = platform === 'Seamless' ? 'https://www.seamless.com' : 'https://www.grubhub.com';
 
-  function parseLocationSlug(addr) {
-    const m = addr.match(/,\s*([^,]+?)\s+([A-Z]{2})\s+\d{5}/);
-    if (!m) return null;
-    const city = m[1].toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    const state = m[2].toLowerCase();
-    return `${state}-${city}`;
-  }
-
   try {
-    // Step 1: Set address on homepage
+    // Step 1: Set address
     console.log(`[${platform}] Loading homepage...`);
     await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout });
     await page.waitForTimeout(2500);
@@ -49,14 +41,13 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
       console.log(`[${platform}] After address URL: ${page.url()}`);
     }
 
-    // Step 2: Use search bar (we know this works from logs)
+    // Step 2: Use search bar
     const searchInput = await page.waitForSelector(
-      'input[placeholder*="Search"], input[placeholder*="search"], input[name="search"], [data-testid="search-input"]',
+      'input[placeholder*="Search"], input[placeholder*="search"], input[name="search"]',
       { timeout: 10000 }
     ).catch(() => null);
 
     if (searchInput) {
-      console.log(`[${platform}] Using search bar...`);
       await searchInput.click({ force: true });
       await searchInput.fill(dish);
       await page.keyboard.press('Enter');
@@ -64,86 +55,66 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
       console.log(`[${platform}] Search URL: ${page.url()}`);
     }
 
-    // Wait for results
     await page.waitForTimeout(2000);
-    const preview = await page.evaluate(() => document.body.innerText.substring(0, 200));
-    console.log(`[${platform}] Preview: ${preview.substring(0, 150)}`);
 
-    // Step 3: Scrape restaurant cards
-    // GrubHub/Seamless search results use li elements and various card formats
+    // Step 3: Scrape cards by walking up from restaurant links
     const rawCards = await page.evaluate(() => {
       const seen = new Set();
       const out = [];
+      const links = document.querySelectorAll('a[href*="/restaurant/"]');
 
-      // Try multiple selector strategies
-      const strategies = [
-        // Strategy 1: restaurant links
-        () => document.querySelectorAll('a[href*="/restaurant/"]'),
-        // Strategy 2: list items with restaurant data
-        () => document.querySelectorAll('[class*="restaurantCard"], [class*="restaurant-card"], [class*="RestaurantCard"]'),
-        // Strategy 3: Any li with a restaurant name
-        () => document.querySelectorAll('ul[class*="restaurants"] li, ul[class*="results"] li'),
-        // Strategy 4: search result items
-        () => document.querySelectorAll('[data-testid*="restaurant"], [data-testid*="store"]'),
-      ];
+      for (const link of links) {
+        const href = link.getAttribute('href');
+        if (!href || seen.has(href)) continue;
+        seen.add(href);
 
-      for (const getElements of strategies) {
-        const els = getElements();
-        if (els.length === 0) continue;
-        console.log('Strategy found', els.length, 'elements');
-
-        for (const el of els) {
-          const href = el.tagName === 'A'
-            ? el.getAttribute('href')
-            : el.querySelector('a')?.getAttribute('href');
-
-          if (!href || seen.has(href)) continue;
-          seen.add(href);
-
-          const text = el.innerText || '';
-          const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-          const name = lines[0];
-
-          if (name && name.length > 2 && !name.startsWith('$')) {
-            out.push({ href, name, text, lines });
-            if (out.length >= 8) break;
-          }
+        // Walk up DOM to find card container with full info (name + rating + eta)
+        let container = link;
+        for (let i = 0; i < 8; i++) {
+          if (!container.parentElement) break;
+          container = container.parentElement;
+          const linesCount = (container.innerText || '').split('\n').filter(l => l.trim().length > 0).length;
+          if (linesCount >= 3) break;
         }
-        if (out.length > 0) break;
-      }
 
-      // Last resort: grab all text blocks that look like restaurant names
-      if (out.length === 0) {
-        const allLinks = document.querySelectorAll('a[href]');
-        for (const link of allLinks) {
-          const href = link.getAttribute('href');
-          if (!href || seen.has(href)) continue;
-          if (!href.includes('/restaurant/') && !href.includes('/store/') && !href.includes('/menu/')) continue;
-          seen.add(href);
-          const text = link.innerText || '';
-          const name = text.split('\n')[0]?.trim();
-          if (name && name.length > 2 && !name.startsWith('$')) {
-            out.push({ href, name, text, lines: text.split('\n').map(l=>l.trim()).filter(l=>l) });
-            if (out.length >= 8) break;
-          }
+        const text = container.innerText || link.innerText || '';
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        const name = lines[0];
+
+        if (name && name.length > 2 && !name.startsWith('$')) {
+          out.push({ href, name, text, lines });
+          if (out.length >= 12) break;
         }
       }
-
       return out;
     });
 
     console.log(`[${platform}] Found ${rawCards.length} restaurants`);
-    if (rawCards[0]) console.log(`[${platform}] Sample lines: ${JSON.stringify(rawCards[0].lines.slice(0,8))}`);
+    if (rawCards[0]) console.log(`[${platform}] Sample lines: ${JSON.stringify(rawCards[0].lines.slice(0, 8))}`);
 
     const storeData = rawCards.map(card => {
       const text = card.text;
-      let deliveryFee = /free/i.test(text) ? 0 : null;
-      if (deliveryFee === null) {
+      // Delivery fee
+      let deliveryFee = null;
+      if (/free delivery/i.test(text) || /\$0\.00 delivery/i.test(text)) deliveryFee = 0;
+      else {
         const m = text.match(/\$(\d+\.?\d*)\s*(?:delivery fee|delivery)/i)
           || text.match(/delivery[:\s]+\$(\d+\.?\d*)/i);
         if (m) deliveryFee = parseFloat(m[1]);
+        // Also check for standalone fee like "$1.99" near "delivery"
+        if (deliveryFee === null) {
+          const lines = card.lines;
+          for (let i = 0; i < lines.length; i++) {
+            if (/delivery/i.test(lines[i])) {
+              const priceMatch = (lines[i-1]||'').match(/\$(\d+\.?\d*)/) || (lines[i]||'').match(/\$(\d+\.?\d*)/);
+              if (priceMatch) { deliveryFee = parseFloat(priceMatch[1]); break; }
+            }
+          }
+        }
       }
-      const ratingM = text.match(/\b([45]\.\d)\b/);
+      // Rating - look for "4.7 (316)" pattern
+      const ratingM = text.match(/\b([45]\.\d)\s*\(/);
+      // ETA
       const etaM = text.match(/(\d+[\s–\-−]+\d+\s*min|\d+\s*min)/i);
       return {
         name: card.name,
@@ -154,25 +125,18 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
       };
     });
 
-    // Step 4: Fetch item prices SEQUENTIALLY to avoid memory crashes
-    // (parallel was crashing Railway - "Target crashed")
+    // Step 4: Sequential store page visits (prevents memory crashes)
     for (const store of storeData) {
       if (!store.href) {
         results.push({ platform, restaurant: store.name, item: dish, itemPrice: null, deliveryFee: store.deliveryFee, totalPrice: null, rating: store.rating, eta: store.eta, url: page.url() });
         continue;
       }
-
       try {
         const storeUrl = store.href.startsWith('http') ? store.href : `${baseUrl}${store.href}`;
         const storePage = await context.newPage();
         await storePage.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
         await storePage.waitForTimeout(4000);
-
-        // Wait for menu items to render
-        await storePage.waitForSelector(
-          '[class*="menuItem"], [class*="MenuItem"], [class*="menu-item"], [class*="itemInfo"]',
-          { timeout: 8000 }
-        ).catch(() => {});
+        await storePage.waitForSelector('[class*="menuItem"], [class*="MenuItem"], [class*="menu-item"]', { timeout: 6000 }).catch(() => {});
 
         const data = await storePage.evaluate((searchDish) => {
           const dishWords = searchDish.toLowerCase().split(' ').filter(w => w.length > 2);
@@ -181,43 +145,27 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
           let deliveryFee = null;
           for (const line of lines) {
             if (/free delivery/i.test(line)) { deliveryFee = 0; break; }
-            if (/delivery fee/i.test(line)) {
-              const m = line.match(/\$(\d+\.?\d*)/);
-              if (m) { deliveryFee = parseFloat(m[1]); break; }
-            }
+            if (/delivery fee/i.test(line)) { const m = line.match(/\$(\d+\.?\d*)/); if (m) { deliveryFee = parseFloat(m[1]); break; } }
           }
 
           const items = [];
           for (let i = 0; i < lines.length - 1; i++) {
-            if (!dishWords.some(w => lines[i].toLowerCase().includes(w))) continue;
-            if (lines[i].length > 80) continue;
+            const lineL = lines[i].toLowerCase();
+            if (!dishWords.some(w => lineL.includes(w))) continue;
+            if (lines[i].length > 100) continue;
             for (let j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
               const m = lines[j].match(/^\$(\d+\.\d{2})$/) || lines[j].match(/^\$(\d+)$/);
-              if (m) {
-                const price = parseFloat(m[1]);
-                if (price > 1 && price < 150) {
-                  items.push({ name: lines[i].substring(0, 70), price });
-                  break;
-                }
-              }
+              if (m) { const p = parseFloat(m[1]); if (p > 1 && p < 150) { items.push({ name: lines[i].substring(0, 70), price: p }); break; } }
             }
           }
           const seen = new Set();
-          return {
-            deliveryFee,
-            items: items.filter(r => {
-              const k = `${r.name}|${r.price}`;
-              if (seen.has(k)) return false;
-              seen.add(k);
-              return true;
-            }).slice(0, 4)
-          };
+          return { deliveryFee, items: items.filter(r => { const k=`${r.name}|${r.price}`; if(seen.has(k))return false; seen.add(k); return true; }).slice(0, 4) };
         }, dish);
 
         await storePage.close();
-        console.log(`[${platform}] ${store.name}: ${data.items.length} items, fee: $${data.deliveryFee}`);
-
         const deliveryFee = data.deliveryFee ?? store.deliveryFee;
+        console.log(`[${platform}] ${store.name}: ${data.items.length} items, fee: $${deliveryFee}, rating: ${store.rating}, eta: ${store.eta}`);
+
         if (data.items.length > 0) {
           data.items.forEach(item => {
             const total = deliveryFee != null ? parseFloat((item.price + deliveryFee).toFixed(2)) : null;

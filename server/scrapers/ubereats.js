@@ -69,7 +69,7 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
         const etaLine = lines.find(l => /\d+\s*(?:–|-|−)\s*\d+\s*min|\d+\s*min/i.test(l));
 
         out.push({ href, name, ratingLine, etaLine, lines });
-        if (out.length >= 8) break;
+        if (out.length >= 12) break;
       }
       return out;
     });

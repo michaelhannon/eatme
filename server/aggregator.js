@@ -11,10 +11,13 @@ function aggregate(allResults, rankBy = 'totalPrice') {
     return { ...r, totalPrice: total };
   });
 
-  // Deduplicate: same platform + restaurant + item + price = one row
+  // Deduplicate: same restaurant + item + price across platforms = one row
+  // GrubHub and Seamless share the same backend so deduplicate them
   const seen = new Set();
   results = results.filter(r => {
-    const key = `${r.platform}|${r.restaurant?.toLowerCase().trim()}|${r.item?.toLowerCase().trim()}|${r.itemPrice}`;
+    // Normalize platform: treat Seamless as GrubHub for dedup purposes
+    const platformNorm = r.platform === 'Seamless' ? 'GrubHub' : r.platform;
+    const key = `${platformNorm}|${r.restaurant?.toLowerCase().trim()}|${r.item?.toLowerCase().trim()}|${r.itemPrice}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
