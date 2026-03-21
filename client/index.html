@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MenuDash — Real-Time Price Comparison</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0d0d0d; --surface: #161616; --surface2: #1f1f1f;
+  --border: #2a2a2a; --text: #f0ece4; --muted: #666;
+  --accent: #ff5c28; --gold: #ffb347; --green: #4ade80;
+  --dd: #ff3008; --gh: #f63440; --ue: #06c167; --sl: #ff3008;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+.container { max-width: 1100px; margin: 0 auto; padding: 40px 20px 80px; }
+
+header { margin-bottom: 40px; }
+.logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 11px; letter-spacing: .25em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; animation: pulse 2s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }
+h1 { font-family: 'Syne', sans-serif; font-size: clamp(28px,5vw,48px); font-weight: 800; line-height: 1; letter-spacing: -.02em; margin-bottom: 8px; }
+h1 span { -webkit-text-stroke: 1px var(--accent); color: transparent; }
+.sub { color: var(--muted); font-size: 14px; font-weight: 300; }
+
+/* Search form */
+.search-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 28px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.form-row.single { grid-template-columns: 1fr; }
+@media(max-width:600px){ .form-row { grid-template-columns: 1fr; } }
+label { display: block; font-size: 11px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+input, select { background: var(--surface2); border: 1px solid var(--border); border-radius: 9px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 10px 14px; width: 100%; outline: none; transition: border-color .2s; }
+input:focus, select:focus { border-color: var(--accent); }
+input::placeholder { color: #444; }
+
+.platform-toggles { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.ptoggle { display: flex; align-items: center; gap: 6px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all .2s; user-select: none; }
+.ptoggle input { width: auto; padding: 0; background: none; border: none; }
+.ptoggle:has(input:checked) { border-color: var(--accent); }
+.ptoggle .badge { width: 8px; height: 8px; border-radius: 50%; }
+
+.search-btn { width: 100%; padding: 14px; background: var(--accent); border: none; border-radius: 10px; color: #fff; font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; transition: all .2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.search-btn:hover:not(:disabled) { background: #ff7043; transform: translateY(-1px); }
+.search-btn:disabled { background: #2a2a2a; color: #444; cursor: not-allowed; transform: none; }
+
+/* Loading */
+.loading { display: none; text-align: center; padding: 60px 0; }
+.loading.active { display: block; }
+.spinner-ring { width: 48px; height: 48px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 16px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-msg { color: var(--muted); font-size: 13px; }
+.platform-status { display: flex; justify-content: center; gap: 20px; margin-top: 20px; flex-wrap: wrap; }
+.pstatus { font-size: 12px; display: flex; align-items: center; gap: 6px; }
+.pstatus .dot { width: 8px; height: 8px; animation: pulse 1.5s ease-in-out infinite; }
+
+/* Summary cards */
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 28px; }
+.summary-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+.summary-card.winner { border-color: var(--green); background: #0a1a0f; }
+.summary-label { font-size: 10px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.summary-value { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700; }
+.summary-value.green { color: var(--green); }
+.summary-value.gold { color: var(--gold); }
+.summary-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+/* Sort controls */
+.controls { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.controls-label { font-size: 12px; color: var(--muted); }
+.sort-btn { font-size: 12px; font-family: 'DM Sans', sans-serif; background: var(--surface); border: 1px solid var(--border); color: var(--muted); padding: 6px 14px; border-radius: 6px; cursor: pointer; transition: all .2s; }
+.sort-btn.active { border-color: var(--accent); color: var(--accent); }
+.results-count { margin-left: auto; font-size: 12px; color: var(--muted); }
+
+/* Results table */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+thead tr { border-bottom: 1px solid var(--border); }
+th { text-align: left; font-size: 11px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding: 10px 14px; white-space: nowrap; cursor: pointer; transition: color .2s; }
+th:hover { color: var(--text); }
+th.sorted { color: var(--accent); }
+tbody tr { border-bottom: 1px solid #1a1a1a; transition: background .15s; }
+tbody tr:hover { background: var(--surface); }
+tbody tr.winner-row { background: #0a1a0f; border-left: 3px solid var(--green); }
+td { padding: 14px; vertical-align: middle; }
+.no-results { text-align: center; padding: 60px; color: var(--muted); font-size: 14px; }
+
+/* Platform badge */
+.platform-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; padding: 3px 8px; border-radius: 5px; white-space: nowrap; }
+.platform-badge.doordash { background: #1a0505; color: var(--dd); border: 1px solid #2a0808; }
+.platform-badge.grubhub { background: #1a0506; color: var(--gh); border: 1px solid #2a0808; }
+.platform-badge.ubereats { background: #041a0c; color: var(--ue); border: 1px solid #083018; }
+.platform-badge.seamless { background: #1a0505; color: #ff8c69; border: 1px solid #2a1010; }
+
+.restaurant-name { font-weight: 500; }
+.item-name { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.price-cell { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px; }
+.price-na { color: #444; font-size: 12px; font-family: inherit; font-weight: 400; }
+.total-cell { font-family: 'Syne', sans-serif; font-weight: 700; color: var(--gold); }
+.total-cell.best { color: var(--green); }
+.rating-cell { display: flex; align-items: center; gap: 5px; }
+.rating-star { color: #ffb347; font-size: 12px; }
+.eta-cell { font-size: 13px; color: var(--muted); }
+.winner-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 500; background: #0a1a0f; color: var(--green); border: 1px solid #1a4a2a; padding: 2px 8px; border-radius: 4px; margin-left: 6px; }
+.delivery-fee { font-size: 12px; color: var(--muted); }
+.free-delivery { color: var(--green); font-size: 12px; font-weight: 500; }
+
+/* Error */
+.error-box { background: #1a0808; border: 1px solid #3a1010; border-radius: 10px; padding: 16px; color: #ff6b6b; font-size: 14px; margin-bottom: 20px; display: none; }
+.error-box.active { display: block; }
+
+/* Results section */
+#results { display: none; }
+#results.active { display: block; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="logo"><div class="dot"></div> MenuDash</div>
+    <h1>Best <span>Price.</span><br>Every Platform.</h1>
+    <p class="sub">Real-time comparison across DoorDash, GrubHub, Seamless & Uber Eats — ranked by total cost to your door.</p>
+  </header>
+
+  <div class="search-card">
+    <div class="form-row">
+      <div>
+        <label>Dish or Item</label>
+        <input type="text" id="dish" placeholder="e.g. chicken soup, pad thai, pizza..." />
+      </div>
+      <div>
+        <label>Delivery Address</label>
+        <input type="text" id="address" value="86 Horsneck Point Rd, Oceanport NJ 07757" />
+      </div>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <label>Platforms</label>
+      <div class="platform-toggles">
+        <label class="ptoggle"><input type="checkbox" value="doordash" checked onchange="togglePlatform()"> <span class="badge" style="background:var(--dd)"></span> DoorDash</label>
+        <label class="ptoggle"><input type="checkbox" value="grubhub" checked onchange="togglePlatform()"> <span class="badge" style="background:var(--gh)"></span> GrubHub</label>
+        <label class="ptoggle"><input type="checkbox" value="seamless" checked onchange="togglePlatform()"> <span class="badge" style="background:#ff8c69"></span> Seamless</label>
+        <label class="ptoggle"><input type="checkbox" value="ubereats" checked onchange="togglePlatform()"> <span class="badge" style="background:var(--ue)"></span> Uber Eats</label>
+      </div>
+    </div>
+
+    <button class="search-btn" id="searchBtn" onclick="runSearch()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      Compare Prices
+    </button>
+  </div>
+
+  <div class="error-box" id="errorBox"></div>
+
+  <div class="loading" id="loading">
+    <div class="spinner-ring"></div>
+    <div class="loading-msg" id="loadingMsg">Launching browsers...</div>
+    <div class="platform-status" id="platformStatus"></div>
+  </div>
+
+  <div id="results">
+    <div class="summary-grid" id="summaryGrid"></div>
+    <div class="controls">
+      <span class="controls-label">Sort by:</span>
+      <button class="sort-btn active" data-sort="totalPrice" onclick="sortResults('totalPrice')">Total price</button>
+      <button class="sort-btn" data-sort="itemPrice" onclick="sortResults('itemPrice')">Item price</button>
+      <button class="sort-btn" data-sort="rating" onclick="sortResults('rating')">Rating</button>
+      <button class="sort-btn" data-sort="eta" onclick="sortResults('eta')">Fastest</button>
+      <span class="results-count" id="resultsCount"></span>
+    </div>
+    <div class="table-wrap">
+      <table id="resultsTable">
+        <thead>
+          <tr>
+            <th>Platform</th>
+            <th>Restaurant</th>
+            <th>Item</th>
+            <th class="sorted" onclick="sortResults('itemPrice')">Item price ↕</th>
+            <th onclick="sortResults('deliveryFee')">Delivery fee ↕</th>
+            <th onclick="sortResults('totalPrice')">Total ↕</th>
+            <th onclick="sortResults('rating')">Rating ↕</th>
+            <th onclick="sortResults('eta')">ETA ↕</th>
+          </tr>
+        </thead>
+        <tbody id="resultsBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentResults = [];
+let currentSort = 'totalPrice';
+
+const LOADING_MSGS = [
+  'Launching browsers on all 4 platforms...',
+  'DoorDash: entering your address...',
+  'GrubHub + Seamless: searching...',
+  'Uber Eats: scraping live prices...',
+  'Comparing and ranking results...'
+];
+
+let loadingInterval;
+
+function startLoadingAnim(platforms) {
+  let i = 0;
+  document.getElementById('loadingMsg').textContent = LOADING_MSGS[0];
+  const statusEl = document.getElementById('platformStatus');
+  statusEl.innerHTML = platforms.map(p => `
+    <div class="pstatus">
+      <div class="dot" style="background:${platformColor(p)}"></div>
+      <span style="color:${platformColor(p)}">${capitalize(p)}</span>
+    </div>`).join('');
+  loadingInterval = setInterval(() => {
+    i = (i + 1) % LOADING_MSGS.length;
+    document.getElementById('loadingMsg').textContent = LOADING_MSGS[i];
+  }, 2200);
+}
+
+function stopLoadingAnim() { clearInterval(loadingInterval); }
+
+function platformColor(p) {
+  return { doordash: '#ff3008', grubhub: '#f63440', seamless: '#ff8c69', ubereats: '#06c167' }[p] || '#888';
+}
+
+function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+function getSelectedPlatforms() {
+  return [...document.querySelectorAll('.ptoggle input:checked')].map(i => i.value);
+}
+
+function togglePlatform() {} // just for UI state
+
+async function runSearch() {
+  const dish = document.getElementById('dish').value.trim();
+  const address = document.getElementById('address').value.trim();
+  const platforms = getSelectedPlatforms();
+
+  if (!dish) { showError('Please enter a dish to search for.'); return; }
+  if (platforms.length === 0) { showError('Please select at least one platform.'); return; }
+
+  clearAll();
+  document.getElementById('loading').classList.add('active');
+  document.getElementById('searchBtn').disabled = true;
+  startLoadingAnim(platforms);
+
+  try {
+    const res = await fetch('/api/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dish, address, platforms, rankBy: 'totalPrice' })
+    });
+
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+    const data = await res.json();
+
+    currentResults = data.results || [];
+    renderSummary(data.summary, data.elapsedSeconds);
+    renderTable(currentResults, currentSort);
+    document.getElementById('results').classList.add('active');
+
+  } catch (err) {
+    showError('Error: ' + err.message + '. Make sure the Node.js server is running.');
+  } finally {
+    stopLoadingAnim();
+    document.getElementById('loading').classList.remove('active');
+    document.getElementById('searchBtn').disabled = false;
+  }
+}
+
+function renderSummary(summary, elapsed) {
+  if (!summary) return;
+  const grid = document.getElementById('summaryGrid');
+  const h = summary.highlights;
+  const cards = [];
+
+  if (h.bestValue) {
+    cards.push(`
+      <div class="summary-card winner">
+        <div class="summary-label">🏆 Best value (total)</div>
+        <div class="summary-value green">$${h.bestValue.totalPrice?.toFixed(2) ?? '—'}</div>
+        <div class="summary-sub">${h.bestValue.restaurant} · ${h.bestValue.platform}</div>
+      </div>`);
+  }
+  if (h.lowestItemPrice) {
+    cards.push(`
+      <div class="summary-card">
+        <div class="summary-label">💰 Lowest item price</div>
+        <div class="summary-value">$${h.lowestItemPrice.itemPrice?.toFixed(2) ?? '—'}</div>
+        <div class="summary-sub">${h.lowestItemPrice.restaurant} · ${h.lowestItemPrice.platform}</div>
+      </div>`);
+  }
+  if (h.bestRated) {
+    cards.push(`
+      <div class="summary-card">
+        <div class="summary-label">⭐ Top rated</div>
+        <div class="summary-value gold">${h.bestRated.rating}</div>
+        <div class="summary-sub">${h.bestRated.restaurant} · ${h.bestRated.platform}</div>
+      </div>`);
+  }
+  if (h.fastestDelivery) {
+    cards.push(`
+      <div class="summary-card">
+        <div class="summary-label">⚡ Fastest delivery</div>
+        <div class="summary-value">${h.fastestDelivery.eta}</div>
+        <div class="summary-sub">${h.fastestDelivery.restaurant} · ${h.fastestDelivery.platform}</div>
+      </div>`);
+  }
+  cards.push(`
+    <div class="summary-card">
+      <div class="summary-label">Search time</div>
+      <div class="summary-value">${elapsed}s</div>
+      <div class="summary-sub">${summary.totalResults} results across ${summary.platforms.length} platforms</div>
+    </div>`);
+
+  grid.innerHTML = cards.join('');
+}
+
+function renderTable(results, sortBy) {
+  const sorted = sortData(results, sortBy);
+  const tbody = document.getElementById('resultsBody');
+  document.getElementById('resultsCount').textContent = `${sorted.length} result${sorted.length !== 1 ? 's' : ''}`;
+
+  if (sorted.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" class="no-results">No results found. Try a different dish or check the server logs.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = sorted.map((r, i) => {
+    const platformSlug = r.platform.toLowerCase().replace(/\s+/g, '');
+    const isWinner = r.isBestValue || i === 0;
+    const hasBoth = r.itemPrice != null && r.deliveryFee != null;
+
+    return `
+      <tr class="${isWinner ? 'winner-row' : ''}">
+        <td><span class="platform-badge ${platformSlug}">${r.platform}</span></td>
+        <td>
+          <div class="restaurant-name">${r.restaurant || '—'}${isWinner ? '<span class="winner-badge">✓ Best value</span>' : ''}</div>
+        </td>
+        <td><div class="item-name">${r.item || '—'}</div></td>
+        <td class="price-cell">${r.itemPrice != null ? '$' + r.itemPrice.toFixed(2) : '<span class="price-na">—</span>'}</td>
+        <td>${r.deliveryFee != null
+          ? (r.deliveryFee === 0 ? '<span class="free-delivery">Free</span>' : '<span class="delivery-fee">$' + r.deliveryFee.toFixed(2) + '</span>')
+          : '<span class="price-na">—</span>'}</td>
+        <td class="total-cell ${isWinner ? 'best' : ''}">${r.totalPrice != null ? '$' + r.totalPrice.toFixed(2) : '<span class="price-na">—</span>'}</td>
+        <td>${r.rating != null
+          ? `<div class="rating-cell"><span class="rating-star">★</span>${r.rating}</div>`
+          : '<span class="price-na">—</span>'}</td>
+        <td class="eta-cell">${r.eta || '—'}</td>
+      </tr>`;
+  }).join('');
+}
+
+function sortData(results, sortBy) {
+  const arr = [...results];
+  switch (sortBy) {
+    case 'itemPrice': return arr.sort((a,b) => (a.itemPrice ?? 999) - (b.itemPrice ?? 999));
+    case 'deliveryFee': return arr.sort((a,b) => (a.deliveryFee ?? 999) - (b.deliveryFee ?? 999));
+    case 'totalPrice': return arr.sort((a,b) => (a.totalPrice ?? 999) - (b.totalPrice ?? 999));
+    case 'rating': return arr.sort((a,b) => (b.rating ?? 0) - (a.rating ?? 0));
+    case 'eta': return arr.sort((a,b) => parseEta(a.eta) - parseEta(b.eta));
+    default: return arr;
+  }
+}
+
+function parseEta(eta) {
+  if (!eta) return 999;
+  const m = eta.match(/(\d+)/);
+  return m ? parseInt(m[1]) : 999;
+}
+
+function sortResults(col) {
+  currentSort = col;
+  document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort === col));
+  renderTable(currentResults, col);
+}
+
+function clearAll() {
+  document.getElementById('errorBox').classList.remove('active');
+  document.getElementById('results').classList.remove('active');
+  document.getElementById('summaryGrid').innerHTML = '';
+  document.getElementById('resultsBody').innerHTML = '';
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorBox');
+  el.textContent = msg;
+  el.classList.add('active');
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !document.getElementById('searchBtn').disabled) runSearch();
+});
+</script>
+</body>
+</html>
