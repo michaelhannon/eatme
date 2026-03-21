@@ -3,12 +3,17 @@ const { chromium } = require('playwright');
 async function scrapeGrubHub({ address, dish, credentials, headless = true, timeout = 45000, platform = 'GrubHub' }) {
   const browser = await chromium.launch({
     headless,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled']
   });
 
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-    viewport: { width: 1280, height: 800 }
+    viewport: { width: 1280, height: 800 },
+    extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' }
+  });
+
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
   });
 
   const page = await context.newPage();
@@ -17,16 +22,25 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
   const encodedDish = encodeURIComponent(dish);
 
   try {
-    // Go directly to search URL — avoids homepage modal entirely
+    console.log(`[${platform}] Navigating to search...`);
     await page.goto(`${baseUrl}/food-delivery/search?queryText=${encodedDish}`, { waitUntil: 'domcontentloaded', timeout });
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
+
+    const currentUrl = page.url();
+    const title = await page.title();
+    console.log(`[${platform}] URL: ${currentUrl}`);
+    console.log(`[${platform}] Title: ${title}`);
+
+    const bodyText = await page.evaluate(() => document.body.innerText.substring(0, 500));
+    console.log(`[${platform}] Body preview: ${bodyText}`);
 
     // Dismiss modal if present
     await page.keyboard.press('Escape');
     await page.waitForTimeout(500);
 
-    // If redirected to home and needs address
-    if (page.url().includes('home') || page.url() === baseUrl + '/') {
+    // Handle address redirect
+    if (currentUrl.includes('address') || currentUrl === baseUrl + '/' || currentUrl.includes('home')) {
+      console.log(`[${platform}] Redirected to address entry page`);
       const addressInput = await page.$('input[placeholder*="Enter delivery address"], input[placeholder*="address"]');
       if (addressInput) {
         await addressInput.click({ force: true });
@@ -36,18 +50,15 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
         if (suggestion) await suggestion.click({ force: true });
         else { await page.keyboard.press('ArrowDown'); await page.waitForTimeout(300); await page.keyboard.press('Enter'); }
         await page.waitForTimeout(2500);
-
-        // Re-navigate to search
         await page.goto(`${baseUrl}/food-delivery/search?queryText=${encodedDish}`, { waitUntil: 'domcontentloaded', timeout });
         await page.waitForTimeout(3000);
       }
     }
 
-    // Wait for restaurant cards
     await page.waitForSelector(
-      '[class*="restaurant-card"], [class*="RestaurantCard"], [data-testid="restaurant-card"], [class*="restaurantCard"]',
+      '[class*="restaurant-card"], [class*="RestaurantCard"], [data-testid="restaurant-card"]',
       { timeout: 15000 }
-    ).catch(() => {});
+    ).catch(e => console.log(`[${platform}] No cards found:`, e.message.split('\n')[0]));
 
     const cards = await page.$$eval(
       '[class*="restaurant-card"], [class*="RestaurantCard"], [data-testid="restaurant-card"]',
@@ -60,14 +71,15 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
       }).filter(c => c.name)
     ).catch(() => []);
 
+    console.log(`[${platform}] Found ${cards.length} restaurant cards`);
+
     cards.forEach(card => {
-      const deliveryFee = parseDeliveryFee(card.deliveryFee);
       results.push({
         platform,
         restaurant: card.name,
         item: dish,
         itemPrice: null,
-        deliveryFee,
+        deliveryFee: parseDeliveryFee(card.deliveryFee),
         totalPrice: null,
         rating: parseRating(card.rating),
         eta: card.deliveryTime || null,
@@ -75,7 +87,6 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
       });
     });
 
-    console.log(`[${platform}] Found ${results.length} results for "${dish}"`);
   } catch (err) {
     console.error(`[${platform}] Scrape error:`, err.message.split('\n')[0]);
   } finally {

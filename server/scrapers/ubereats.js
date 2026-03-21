@@ -3,26 +3,40 @@ const { chromium } = require('playwright');
 async function scrapeUberEats({ address, dish, credentials, headless = true, timeout = 45000 }) {
   const browser = await chromium.launch({
     headless,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled']
   });
 
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
     viewport: { width: 1280, height: 800 },
-    locale: 'en-US'
+    locale: 'en-US',
+    extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' }
+  });
+
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
   });
 
   const page = await context.newPage();
   const results = [];
 
   try {
-    // Go directly to search URL with address — bypass homepage modal entirely
     const encodedDish = encodeURIComponent(dish);
+    console.log(`[UberEats] Navigating to search for "${dish}"...`);
     await page.goto(`https://www.ubereats.com/search?q=${encodedDish}`, { waitUntil: 'domcontentloaded', timeout });
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
 
-    // If redirected to address entry, handle it
-    if (page.url().includes('location') || page.url().includes('home')) {
+    const currentUrl = page.url();
+    const title = await page.title();
+    console.log(`[UberEats] URL: ${currentUrl}`);
+    console.log(`[UberEats] Title: ${title}`);
+
+    const bodyText = await page.evaluate(() => document.body.innerText.substring(0, 500));
+    console.log(`[UberEats] Body preview: ${bodyText}`);
+
+    // Handle address entry if redirected
+    if (!currentUrl.includes('search')) {
+      console.log('[UberEats] Redirected away from search, handling address...');
       await page.keyboard.press('Escape');
       await page.waitForTimeout(500);
 
@@ -37,43 +51,44 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
         await page.waitForTimeout(1500);
         const suggestion = await page.$('li[role="option"]:first-child, [data-testid="autocomplete-result"]:first-child');
         if (suggestion) await suggestion.click({ force: true });
-        else await page.keyboard.press('Enter');
+        else { await page.keyboard.press('ArrowDown'); await page.waitForTimeout(300); await page.keyboard.press('Enter'); }
         await page.waitForTimeout(2000);
 
-        // Now search for dish
+        const confirmBtn = await page.$('button:has-text("Deliver here"), button:has-text("Confirm")');
+        if (confirmBtn) await confirmBtn.click({ force: true });
+        await page.waitForTimeout(1500);
+
         await page.goto(`https://www.ubereats.com/search?q=${encodedDish}`, { waitUntil: 'domcontentloaded', timeout });
         await page.waitForTimeout(3000);
+        console.log(`[UberEats] URL after address+search: ${page.url()}`);
       }
     }
 
-    // Wait for search results
     await page.waitForSelector(
-      '[data-testid="store-card"], [class*="StoreCard"], [class*="store-card"]',
+      '[data-testid="store-card"], [class*="StoreCard"]',
       { timeout: 15000 }
-    ).catch(() => {});
+    ).catch(e => console.log('[UberEats] No store cards found:', e.message.split('\n')[0]));
 
-    // Scrape store cards from actual search results
     const storeResults = await page.$$eval(
       '[data-testid="store-card"], [class*="StoreCard"]',
-      (cards, searchDish) => cards.slice(0, 15).map(card => {
+      (cards) => cards.slice(0, 15).map(card => {
         const name = card.querySelector('[data-testid="store-name"], [class*="store-name"], h3, [class*="heading"]')?.innerText?.trim();
-        const rating = card.querySelector('[class*="rating"], [aria-label*="rating"], [class*="Rating"]')?.innerText?.trim();
-        const deliveryFee = card.querySelector('[class*="delivery-fee"], [class*="DeliveryFee"], [class*="fee"]')?.innerText?.trim();
-        const eta = card.querySelector('[class*="time"], [class*="eta"], [class*="ETA"]')?.innerText?.trim();
-        const categories = card.querySelector('[class*="category"], [class*="cuisine"], [class*="tag"]')?.innerText?.trim();
-        return { name, rating, deliveryFee, eta, categories };
-      }).filter(c => c.name),
-      dish
+        const rating = card.querySelector('[class*="rating"], [aria-label*="rating"]')?.innerText?.trim();
+        const deliveryFee = card.querySelector('[class*="delivery-fee"], [class*="DeliveryFee"]')?.innerText?.trim();
+        const eta = card.querySelector('[class*="time"], [class*="eta"]')?.innerText?.trim();
+        return { name, rating, deliveryFee, eta };
+      }).filter(c => c.name)
     ).catch(() => []);
 
+    console.log(`[UberEats] Found ${storeResults.length} store cards`);
+
     storeResults.forEach(card => {
-      const deliveryFee = parseDeliveryFee(card.deliveryFee);
       results.push({
         platform: 'Uber Eats',
         restaurant: card.name,
         item: dish,
         itemPrice: null,
-        deliveryFee,
+        deliveryFee: parseDeliveryFee(card.deliveryFee),
         totalPrice: null,
         rating: parseRating(card.rating),
         eta: card.eta || null,
@@ -81,7 +96,6 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
       });
     });
 
-    console.log(`[UberEats] Found ${results.length} results for "${dish}"`);
   } catch (err) {
     console.error('[UberEats] Scrape error:', err.message.split('\n')[0]);
   } finally {
