@@ -15,75 +15,57 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
   const results = [];
 
   try {
-    await page.goto('https://www.doordash.com', { waitUntil: 'domcontentloaded', timeout });
+    // Go directly to search — skips homepage modal
+    const encodedDish = encodeURIComponent(dish);
+    const encodedAddress = encodeURIComponent(address);
+    await page.goto(`https://www.doordash.com/search/store/${encodedDish}/`, { waitUntil: 'domcontentloaded', timeout });
     await page.waitForTimeout(2000);
 
-    // Dismiss the login modal if it appears by pressing Escape
+    // Dismiss any modal with Escape
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(800);
 
-    // Also try clicking outside the modal
-    try {
-      const overlay = await page.$('[data-testid="LAYER-MANAGER-MODAL"], .OverlayLayer-sc-ek6cb4-1');
-      if (overlay) {
-        await page.mouse.click(10, 10); // click top-left corner away from modal
-        await page.waitForTimeout(500);
-      }
-    } catch(e) {}
+    // If we need to set address first
+    const needsAddress = await page.$('#HomeAddressAutocomplete, input[placeholder="Enter delivery address"]');
+    if (needsAddress) {
+      await needsAddress.click({ force: true });
+      await needsAddress.fill(address);
+      await page.waitForTimeout(1500);
+      const suggestion = await page.$('li[role="option"]:first-child, [id*="Suggestion"]:first-child');
+      if (suggestion) await suggestion.click({ force: true });
+      else { await page.keyboard.press('ArrowDown'); await page.waitForTimeout(300); await page.keyboard.press('Enter'); }
+      await page.waitForTimeout(2500);
 
-    // Wait for and click address input
-    const addressInput = await page.waitForSelector(
-      '#HomeAddressAutocomplete, input[placeholder="Enter delivery address"], input[placeholder*="address"]',
-      { timeout }
-    );
-    await addressInput.click({ force: true }); // force bypasses overlay intercept
-    await page.waitForTimeout(300);
-    await addressInput.fill(address);
-    await page.waitForTimeout(1500);
-
-    // Select first autocomplete suggestion
-    const suggestion = await page.$('[id*="AddressAutocompleteSuggestion"], [class*="autocomplete"] li:first-child, li[role="option"]:first-child');
-    if (suggestion) {
-      await suggestion.click({ force: true });
-    } else {
-      await page.keyboard.press('ArrowDown');
-      await page.waitForTimeout(300);
-      await page.keyboard.press('Enter');
-    }
-    await page.waitForTimeout(2500);
-
-    // Search for dish
-    const searchInput = await page.waitForSelector(
-      'input[placeholder*="Search"], [data-anchor-id="MainSearchInput"]',
-      { timeout }
-    ).catch(() => null);
-
-    if (searchInput) {
-      await searchInput.click({ force: true });
-      await searchInput.fill(dish);
-      await page.keyboard.press('Enter');
+      // Re-navigate to search after setting address
+      await page.goto(`https://www.doordash.com/search/store/${encodedDish}/`, { waitUntil: 'domcontentloaded', timeout });
       await page.waitForTimeout(3000);
     }
 
-    // Scrape store cards
-    const storeCards = await page.$$eval(
+    // Wait for store cards
+    await page.waitForSelector(
       '[data-anchor-id="StoreCard"], [class*="StoreCard"], [data-testid="store-card"]',
-      (cards) => cards.slice(0, 10).map(card => {
+      { timeout: 15000 }
+    ).catch(() => {});
+
+    const storeCards = await page.$$eval(
+      '[data-anchor-id="StoreCard"], [class*="StoreCard"]',
+      (cards) => cards.slice(0, 15).map(card => {
         const name = card.querySelector('[data-anchor-id="StoreCardName"], [class*="name"], h3')?.innerText?.trim();
         const rating = card.querySelector('[class*="rating"], [class*="Rating"]')?.innerText?.trim();
         const deliveryFee = card.querySelector('[class*="delivery-fee"], [class*="DeliveryFee"], [class*="fee"]')?.innerText?.trim();
-        const deliveryTime = card.querySelector('[class*="delivery-time"], [class*="DeliveryTime"]')?.innerText?.trim();
+        const deliveryTime = card.querySelector('[class*="delivery-time"], [class*="DeliveryTime"], [class*="eta"]')?.innerText?.trim();
         return { name, rating, deliveryFee, deliveryTime };
       }).filter(c => c.name)
     ).catch(() => []);
 
     storeCards.forEach(card => {
+      const deliveryFee = parseDeliveryFee(card.deliveryFee);
       results.push({
         platform: 'DoorDash',
         restaurant: card.name,
         item: dish,
         itemPrice: null,
-        deliveryFee: parseDeliveryFee(card.deliveryFee),
+        deliveryFee,
         totalPrice: null,
         rating: parseRating(card.rating),
         eta: card.deliveryTime || null,
@@ -91,7 +73,7 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
       });
     });
 
-    console.log(`[DoorDash] Found ${results.length} results`);
+    console.log(`[DoorDash] Found ${results.length} results for "${dish}"`);
   } catch (err) {
     console.error('[DoorDash] Scrape error:', err.message.split('\n')[0]);
   } finally {
@@ -100,15 +82,11 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
   return results;
 }
 
-function parsePrice(str) {
-  if (!str) return null;
-  const match = str.match(/\$?([\d.]+)/);
-  return match ? parseFloat(match[1]) : null;
-}
 function parseDeliveryFee(str) {
   if (!str) return null;
   if (str.toLowerCase().includes('free')) return 0;
-  return parsePrice(str);
+  const match = str.match(/\$?([\d.]+)/);
+  return match ? parseFloat(match[1]) : null;
 }
 function parseRating(str) {
   if (!str) return null;

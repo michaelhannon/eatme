@@ -16,68 +16,54 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
   const results = [];
 
   try {
-    await page.goto('https://www.ubereats.com', { waitUntil: 'domcontentloaded', timeout });
+    // Go directly to search URL with address — bypass homepage modal entirely
+    const encodedDish = encodeURIComponent(dish);
+    await page.goto(`https://www.ubereats.com/search?q=${encodedDish}`, { waitUntil: 'domcontentloaded', timeout });
     await page.waitForTimeout(2000);
 
-    // Dismiss any modal/popup with Escape
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(500);
+    // If redirected to address entry, handle it
+    if (page.url().includes('location') || page.url().includes('home')) {
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(500);
 
-    // Find address input and use force click to bypass overlays
-    const addressInput = await page.waitForSelector(
-      'input[placeholder*="Enter a new address"], input[placeholder*="delivery address"], input[placeholder*="Address"], [data-testid="address-input"]',
-      { timeout }
-    );
-    await addressInput.click({ force: true });
-    await page.waitForTimeout(300);
-    await addressInput.fill(address);
-    await page.waitForTimeout(1800);
+      const addressInput = await page.waitForSelector(
+        'input[placeholder*="address"], input[placeholder*="Address"], [data-testid="address-input"]',
+        { timeout: 15000 }
+      ).catch(() => null);
 
-    // Select autocomplete suggestion
-    const suggestion = await page.$(
-      '[data-testid="autocomplete-result"]:first-child, li[role="option"]:first-child, [class*="AutocompleteResults"] li:first-child'
-    );
-    if (suggestion) {
-      await suggestion.click({ force: true });
-    } else {
-      await page.keyboard.press('ArrowDown');
-      await page.waitForTimeout(300);
-      await page.keyboard.press('Enter');
-    }
-    await page.waitForTimeout(1500);
+      if (addressInput) {
+        await addressInput.click({ force: true });
+        await addressInput.fill(address);
+        await page.waitForTimeout(1500);
+        const suggestion = await page.$('li[role="option"]:first-child, [data-testid="autocomplete-result"]:first-child');
+        if (suggestion) await suggestion.click({ force: true });
+        else await page.keyboard.press('Enter');
+        await page.waitForTimeout(2000);
 
-    // Confirm delivery if button appears
-    const confirmBtn = await page.$('button:has-text("Deliver here"), button:has-text("Confirm"), button:has-text("Done")');
-    if (confirmBtn) {
-      await confirmBtn.click({ force: true });
-      await page.waitForTimeout(1500);
+        // Now search for dish
+        await page.goto(`https://www.ubereats.com/search?q=${encodedDish}`, { waitUntil: 'domcontentloaded', timeout });
+        await page.waitForTimeout(3000);
+      }
     }
 
-    // Search for dish
-    const searchBtn = await page.$('[data-testid="search-suggestions-input"], input[placeholder*="Search UberEats"], input[placeholder*="Search restaurants"]');
-    if (searchBtn) {
-      await searchBtn.click({ force: true });
-      await page.waitForTimeout(300);
-      await searchBtn.fill(dish);
-      await page.keyboard.press('Enter');
-      await page.waitForTimeout(3500);
-    }
-
-    // Scrape store cards
+    // Wait for search results
     await page.waitForSelector(
-      '[data-testid="store-card"], [class*="StoreCard"]',
-      { timeout: 10000 }
+      '[data-testid="store-card"], [class*="StoreCard"], [class*="store-card"]',
+      { timeout: 15000 }
     ).catch(() => {});
 
+    // Scrape store cards from actual search results
     const storeResults = await page.$$eval(
       '[data-testid="store-card"], [class*="StoreCard"]',
-      (cards) => cards.slice(0, 10).map(card => {
-        const name = card.querySelector('[data-testid="store-name"], [class*="store-name"], h3')?.innerText?.trim();
-        const rating = card.querySelector('[class*="rating"], [aria-label*="rating"]')?.innerText?.trim();
-        const deliveryFee = card.querySelector('[class*="delivery-fee"], [class*="DeliveryFee"]')?.innerText?.trim();
-        const eta = card.querySelector('[class*="time"], [class*="eta"]')?.innerText?.trim();
-        return { name, rating, deliveryFee, eta };
-      }).filter(c => c.name)
+      (cards, searchDish) => cards.slice(0, 15).map(card => {
+        const name = card.querySelector('[data-testid="store-name"], [class*="store-name"], h3, [class*="heading"]')?.innerText?.trim();
+        const rating = card.querySelector('[class*="rating"], [aria-label*="rating"], [class*="Rating"]')?.innerText?.trim();
+        const deliveryFee = card.querySelector('[class*="delivery-fee"], [class*="DeliveryFee"], [class*="fee"]')?.innerText?.trim();
+        const eta = card.querySelector('[class*="time"], [class*="eta"], [class*="ETA"]')?.innerText?.trim();
+        const categories = card.querySelector('[class*="category"], [class*="cuisine"], [class*="tag"]')?.innerText?.trim();
+        return { name, rating, deliveryFee, eta, categories };
+      }).filter(c => c.name),
+      dish
     ).catch(() => []);
 
     storeResults.forEach(card => {
@@ -95,7 +81,7 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
       });
     });
 
-    console.log(`[UberEats] Found ${results.length} results`);
+    console.log(`[UberEats] Found ${results.length} results for "${dish}"`);
   } catch (err) {
     console.error('[UberEats] Scrape error:', err.message.split('\n')[0]);
   } finally {
@@ -104,15 +90,11 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
   return results;
 }
 
-function parsePrice(str) {
-  if (!str) return null;
-  const match = str.match(/\$?([\d.]+)/);
-  return match ? parseFloat(match[1]) : null;
-}
 function parseDeliveryFee(str) {
   if (!str) return null;
   if (str.toLowerCase().includes('free') || str === '$0.00') return 0;
-  return parsePrice(str);
+  const match = str.match(/\$?([\d.]+)/);
+  return match ? parseFloat(match[1]) : null;
 }
 function parseRating(str) {
   if (!str) return null;
