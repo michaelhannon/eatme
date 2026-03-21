@@ -163,7 +163,9 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
         const storeUrl = store.href.startsWith('http') ? store.href : `${baseUrl}${store.href}`;
         const storePage = await context.newPage();
         await storePage.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
-        await storePage.waitForTimeout(2500);
+        await storePage.waitForTimeout(4000);
+        // Wait for GrubHub menu items to render via JS
+        await storePage.waitForSelector('[class*="menuItem"], [class*="MenuItem"], [class*="menu-item"]', { timeout: 8000 }).catch(() => {});
 
         const data = await storePage.evaluate((searchDish) => {
           const dishWords = searchDish.toLowerCase().split(' ').filter(w => w.length > 2);
@@ -234,3 +236,7 @@ async function scrapeSeamless(params) {
 }
 
 module.exports = { scrapeGrubHub, scrapeSeamless };
+
+// Note: item price extraction needs longer wait for GrubHub JS rendering
+// This is appended as a reminder — the fix is in the storePage wait time above (2500ms)
+// If still not working, increase to 4000ms and add: await storePage.waitForSelector('[class*="menuItem"], [class*="MenuItem"]', {timeout:8000}).catch(()=>{})

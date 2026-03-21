@@ -19,109 +19,77 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
   const page = await context.newPage();
   const results = [];
 
+  // Parse city/state/zip for DoorDash URL
+  function parseAddressForDD(addr) {
+    const m = addr.match(/,\s*([^,]+?)\s+([A-Z]{2})\s+(\d{5})/);
+    if (!m) return null;
+    const city = m[1].toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const state = m[2].toLowerCase();
+    const zip = m[3];
+    return { city, state, zip, slug: `${city}-${state}` };
+  }
+
   try {
-    // Step 1: Go straight to search with address as query param — skip homepage modal entirely
-    // DoorDash supports address in URL: /food-delivery/[city-state]/[zip]/
+    const loc = parseAddressForDD(address);
+    console.log(`[DoorDash] Address parsed: ${JSON.stringify(loc)}`);
+
+    // Strategy: Go directly to search URL with city/state — skip homepage entirely
+    // DoorDash URL format: /delivery/[city]-[state]/[dish]/
     const encodedDish = encodeURIComponent(dish);
+    const dishSlug = dish.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 
-    // First try: load homepage and wait for any input
-    console.log(`[DoorDash] Loading homepage...`);
-    await page.goto('https://www.doordash.com', { waitUntil: 'domcontentloaded', timeout });
-    await page.waitForTimeout(3000);
-
-    // Log what's on the page
-    const pageTitle = await page.title();
-    console.log(`[DoorDash] Page title: ${pageTitle}`);
-
-    // Try to dismiss modal
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(800);
-
-    // Find ANY text input on the page
-    const allInputs = await page.evaluate(() => {
-      const inputs = document.querySelectorAll('input');
-      return Array.from(inputs).map(i => ({
-        id: i.id,
-        name: i.name,
-        placeholder: i.placeholder,
-        type: i.type,
-        visible: i.offsetWidth > 0
-      }));
-    });
-    console.log(`[DoorDash] All inputs found: ${JSON.stringify(allInputs)}`);
-
-    // Try every possible address input selector
-    const addressSelectors = [
-      '#HomeAddressAutocomplete',
-      'input[placeholder="Enter delivery address"]',
-      'input[placeholder*="delivery address"]',
-      'input[placeholder*="Enter delivery"]',
-      'input[placeholder*="address"]',
-      'input[placeholder*="Address"]',
-      'input[data-anchor-id="AddressAutocomplete"]',
-      '[data-anchor-id="AddressAutocomplete"] input',
-      'input[autocomplete="street-address"]',
-      'input[type="text"]'  // last resort
+    const searchUrls = loc ? [
+      `https://www.doordash.com/delivery/${loc.slug}/${dishSlug}/`,
+      `https://www.doordash.com/delivery/${loc.zip}/${dishSlug}/`,
+      `https://www.doordash.com/search/store/${encodedDish}/`,
+    ] : [
+      `https://www.doordash.com/search/store/${encodedDish}/`,
     ];
 
-    let addressInput = null;
-    let usedSelector = null;
-    for (const sel of addressSelectors) {
-      const el = await page.$(sel);
-      if (el) {
-        const visible = await el.evaluate(e => e.offsetWidth > 0);
-        if (visible) {
-          addressInput = el;
-          usedSelector = sel;
-          break;
-        }
+    let landed = false;
+    for (const url of searchUrls) {
+      console.log(`[DoorDash] Trying: ${url}`);
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      await page.waitForTimeout(3000);
+
+      // Dismiss any modal
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(500);
+
+      const preview = await page.evaluate(() => document.body.innerText.substring(0, 200));
+      console.log(`[DoorDash] Preview: ${preview.substring(0, 100)}`);
+
+      // Check if we got real results (store links present)
+      const hasStores = await page.$('a[href*="/store/"]');
+      if (hasStores) {
+        console.log(`[DoorDash] Found stores at: ${url}`);
+        landed = true;
+        break;
+      }
+
+      // Check if it's asking for address input
+      const needsAddress = await page.$('#HomeAddressAutocomplete, input[placeholder*="delivery address"], input[placeholder*="Enter delivery"]');
+      if (needsAddress) {
+        console.log(`[DoorDash] Address input found, entering address...`);
+        await needsAddress.click({ force: true });
+        await needsAddress.fill('');
+        await needsAddress.type(address, { delay: 40 });
+        await page.waitForTimeout(1800);
+        const suggestion = await page.$('li[role="option"]:first-child, [id*="Suggestion"]:first-child');
+        if (suggestion) await suggestion.click({ force: true });
+        else { await page.keyboard.press('ArrowDown'); await page.waitForTimeout(300); await page.keyboard.press('Enter'); }
+        await page.waitForTimeout(2500);
+        console.log(`[DoorDash] URL after address: ${page.url()}`);
+        // Re-navigate to search
+        await page.goto(`https://www.doordash.com/search/store/${encodedDish}/`, { waitUntil: 'domcontentloaded', timeout });
+        await page.waitForTimeout(3000);
+        landed = true;
+        break;
       }
     }
 
-    if (addressInput) {
-      console.log(`[DoorDash] Found address input with: ${usedSelector}`);
-      await addressInput.click({ force: true });
-      await addressInput.fill('');
-      await addressInput.type(address, { delay: 40 });
-      await page.waitForTimeout(2000);
-
-      // Log suggestions
-      const suggestions = await page.evaluate(() => {
-        const items = document.querySelectorAll('li[role="option"], [id*="Suggestion"]');
-        return Array.from(items).slice(0, 3).map(i => i.innerText?.substring(0, 50));
-      });
-      console.log(`[DoorDash] Suggestions: ${JSON.stringify(suggestions)}`);
-
-      const suggestion = await page.$('li[role="option"]:first-child, [id*="Suggestion"]:first-child');
-      if (suggestion) {
-        await suggestion.click({ force: true });
-        console.log('[DoorDash] Clicked suggestion');
-      } else {
-        await page.keyboard.press('ArrowDown');
-        await page.waitForTimeout(300);
-        await page.keyboard.press('Enter');
-        console.log('[DoorDash] Used keyboard for suggestion');
-      }
-      await page.waitForTimeout(2500);
-      console.log(`[DoorDash] URL after address: ${page.url()}`);
-    } else {
-      console.log('[DoorDash] No address input found on homepage, trying direct search URL');
-    }
-
-    // Step 2: Navigate to search
-    await page.goto(`https://www.doordash.com/search/store/${encodedDish}/`, { waitUntil: 'domcontentloaded', timeout });
-    await page.waitForTimeout(4000);
     console.log(`[DoorDash] Search URL: ${page.url()}`);
-
-    const preview = await page.evaluate(() => document.body.innerText.substring(0, 300));
-    console.log(`[DoorDash] Preview: ${preview}`);
-
-    // Check what links exist
-    const storeLinks = await page.evaluate(() => {
-      const links = document.querySelectorAll('a[href*="/store/"]');
-      return Array.from(links).slice(0, 3).map(l => ({ href: l.getAttribute('href'), text: l.innerText?.substring(0, 50) }));
-    });
-    console.log(`[DoorDash] Store links found: ${JSON.stringify(storeLinks)}`);
+    await page.waitForSelector('a[href*="/store/"]', { timeout: 12000 }).catch(() => console.log('[DoorDash] No store links'));
 
     const rawCards = await page.evaluate(() => {
       const seen = new Set();
@@ -134,7 +102,7 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
         const text = card.innerText || '';
         const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         const name = lines[0];
-        if (name && name.length > 2) {
+        if (name && name.length > 2 && !name.startsWith('$')) {
           out.push({ href, name, text, lines });
           if (out.length >= 8) break;
         }
@@ -143,6 +111,7 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
     });
 
     console.log(`[DoorDash] Found ${rawCards.length} stores`);
+    if (rawCards[0]) console.log(`[DoorDash] Sample: ${JSON.stringify(rawCards[0].lines.slice(0,6))}`);
 
     const storeData = rawCards.map(card => {
       const text = card.text;
@@ -162,39 +131,27 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
         const storeUrl = store.href.startsWith('http') ? store.href : `https://www.doordash.com${store.href}`;
         const storePage = await context.newPage();
         await storePage.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
-        await storePage.waitForTimeout(2500);
+        await storePage.waitForTimeout(3000);
 
         const data = await storePage.evaluate((searchDish) => {
           const dishWords = searchDish.toLowerCase().split(' ').filter(w => w.length > 2);
           const lines = document.body.innerText.split('\n').map(l => l.trim()).filter(l => l);
-
           let deliveryFee = null;
           for (const line of lines) {
             if (/free delivery/i.test(line)) { deliveryFee = 0; break; }
-            if (/delivery fee/i.test(line)) {
-              const m = line.match(/\$(\d+\.?\d*)/);
-              if (m) { deliveryFee = parseFloat(m[1]); break; }
-            }
+            if (/delivery fee/i.test(line)) { const m = line.match(/\$(\d+\.?\d*)/); if (m) { deliveryFee = parseFloat(m[1]); break; } }
           }
-
           const items = [];
           for (let i = 0; i < lines.length - 1; i++) {
             if (!dishWords.some(w => lines[i].toLowerCase().includes(w))) continue;
             if (lines[i].length > 80) continue;
             for (let j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
               const m = lines[j].match(/^\$(\d+\.\d{2})$/) || lines[j].match(/^\$(\d+)$/);
-              if (m) {
-                const price = parseFloat(m[1]);
-                if (price > 1 && price < 150) { items.push({ name: lines[i].substring(0, 70), price }); break; }
-              }
+              if (m) { const price = parseFloat(m[1]); if (price > 1 && price < 150) { items.push({ name: lines[i].substring(0, 70), price }); break; } }
             }
           }
-
           const seen = new Set();
-          return {
-            deliveryFee,
-            items: items.filter(r => { const k = `${r.name}|${r.price}`; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 4)
-          };
+          return { deliveryFee, items: items.filter(r => { const k=`${r.name}|${r.price}`; if(seen.has(k))return false; seen.add(k); return true; }).slice(0, 4) };
         }, dish);
 
         await storePage.close();
