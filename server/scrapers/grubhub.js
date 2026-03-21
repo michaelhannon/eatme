@@ -1,6 +1,12 @@
 const { chromium } = require('playwright');
 
 async function scrapeGrubHub({ address, dish, credentials, headless = true, timeout = 45000, platform = 'GrubHub' }) {
+  // Seamless = GrubHub backend — skip to avoid duplicates and save time
+  if (platform === 'Seamless') {
+    console.log(`[Seamless] Skipping — same data as GrubHub`);
+    return [];
+  }
+
   const browser = await chromium.launch({
     headless,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled']
@@ -18,30 +24,29 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
 
   const page = await context.newPage();
   const results = [];
-  const baseUrl = platform === 'Seamless' ? 'https://www.seamless.com' : 'https://www.grubhub.com';
+  const baseUrl = 'https://www.grubhub.com';
 
   try {
     // Step 1: Set address
-    console.log(`[${platform}] Loading homepage...`);
+    console.log(`[GrubHub] Loading homepage...`);
     await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout });
-    await page.waitForTimeout(2500);
+    await page.waitForTimeout(2000);
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(400);
 
-    const addressInput = await page.$('input[placeholder*="Enter delivery address"], input[placeholder*="delivery address"], input[placeholder*="address"], input[type="text"]');
+    const addressInput = await page.$('input[type="text"]');
     if (addressInput) {
       await addressInput.click({ force: true });
       await addressInput.fill('');
       await addressInput.type(address, { delay: 40 });
       await page.waitForTimeout(1800);
-      const suggestion = await page.$('li[role="option"]:first-child, [data-testid="suggestion-item"]:first-child, [class*="autocomplete"] li:first-child');
+      const suggestion = await page.$('li[role="option"]:first-child, [data-testid="suggestion-item"]:first-child');
       if (suggestion) await suggestion.click({ force: true });
       else { await page.keyboard.press('ArrowDown'); await page.waitForTimeout(300); await page.keyboard.press('Enter'); }
       await page.waitForTimeout(2500);
-      console.log(`[${platform}] After address URL: ${page.url()}`);
     }
 
-    // Step 2: Use search bar
+    // Step 2: Search
     const searchInput = await page.waitForSelector(
       'input[placeholder*="Search"], input[placeholder*="search"], input[name="search"]',
       { timeout: 10000 }
@@ -51,13 +56,11 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
       await searchInput.click({ force: true });
       await searchInput.fill(dish);
       await page.keyboard.press('Enter');
-      await page.waitForTimeout(4000);
-      console.log(`[${platform}] Search URL: ${page.url()}`);
+      await page.waitForTimeout(3500);
+      console.log(`[GrubHub] Search URL: ${page.url()}`);
     }
 
-    await page.waitForTimeout(2000);
-
-    // Step 3: Scrape cards by walking up from restaurant links
+    // Step 3: Get restaurant cards — walk up from links
     const rawCards = await page.evaluate(() => {
       const seen = new Set();
       const out = [];
@@ -68,90 +71,69 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
         if (!href || seen.has(href)) continue;
         seen.add(href);
 
-        // Walk up DOM to find card container with full info (name + rating + eta)
+        // Walk up to find container with rating info
         let container = link;
         for (let i = 0; i < 8; i++) {
           if (!container.parentElement) break;
           container = container.parentElement;
-          const linesCount = (container.innerText || '').split('\n').filter(l => l.trim().length > 0).length;
-          if (linesCount >= 3) break;
+          const lines = (container.innerText || '').split('\n').filter(l => l.trim()).length;
+          if (lines >= 3) break;
         }
 
         const text = container.innerText || link.innerText || '';
         const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         const name = lines[0];
-
         if (name && name.length > 2 && !name.startsWith('$')) {
           out.push({ href, name, text, lines });
-          if (out.length >= 12) break;
+          if (out.length >= 6) break; // Cap at 6 to keep speed reasonable
         }
       }
       return out;
     });
 
-    console.log(`[${platform}] Found ${rawCards.length} restaurants`);
-    if (rawCards[0]) console.log(`[${platform}] Sample lines: ${JSON.stringify(rawCards[0].lines.slice(0, 8))}`);
+    console.log(`[GrubHub] Found ${rawCards.length} restaurants`);
+    if (rawCards[0]) console.log(`[GrubHub] Sample: ${JSON.stringify(rawCards[0].lines.slice(0,6))}`);
 
     const storeData = rawCards.map(card => {
       const text = card.text;
-      // Delivery fee
       let deliveryFee = null;
-      if (/free delivery/i.test(text) || /\$0\.00 delivery/i.test(text)) deliveryFee = 0;
+      if (/free delivery|\$0\.00/i.test(text)) deliveryFee = 0;
       else {
         const m = text.match(/\$(\d+\.?\d*)\s*(?:delivery fee|delivery)/i)
           || text.match(/delivery[:\s]+\$(\d+\.?\d*)/i);
         if (m) deliveryFee = parseFloat(m[1]);
-        // Also check for standalone fee like "$1.99" near "delivery"
-        if (deliveryFee === null) {
-          const lines = card.lines;
-          for (let i = 0; i < lines.length; i++) {
-            if (/delivery/i.test(lines[i])) {
-              const priceMatch = (lines[i-1]||'').match(/\$(\d+\.?\d*)/) || (lines[i]||'').match(/\$(\d+\.?\d*)/);
-              if (priceMatch) { deliveryFee = parseFloat(priceMatch[1]); break; }
-            }
-          }
-        }
       }
-      // Rating - look for "4.7 (316)" pattern
-      const ratingM = text.match(/\b([45]\.\d)\s*\(/);
-      // ETA
+      // Rating: "4.7 (316)" pattern
+      const ratingM = text.match(/\b([45]\.\d)\s*[\(\d]/);
       const etaM = text.match(/(\d+[\s–\-−]+\d+\s*min|\d+\s*min)/i);
-      return {
-        name: card.name,
-        href: card.href,
-        deliveryFee,
-        rating: ratingM ? parseFloat(ratingM[1]) : null,
-        eta: etaM ? etaM[1]?.trim() : null
-      };
+      return { name: card.name, href: card.href, deliveryFee, rating: ratingM ? parseFloat(ratingM[1]) : null, eta: etaM ? etaM[1]?.trim() : null };
     });
 
-    // Step 4: Sequential store page visits (prevents memory crashes)
+    // Step 4: Sequential store visits, strict 10s timeout per store
     for (const store of storeData) {
       if (!store.href) {
-        results.push({ platform, restaurant: store.name, item: dish, itemPrice: null, deliveryFee: store.deliveryFee, totalPrice: null, rating: store.rating, eta: store.eta, url: page.url() });
+        results.push({ platform: 'GrubHub', restaurant: store.name, item: dish, itemPrice: null, deliveryFee: store.deliveryFee, totalPrice: null, rating: store.rating, eta: store.eta, url: page.url() });
         continue;
       }
       try {
         const storeUrl = store.href.startsWith('http') ? store.href : `${baseUrl}${store.href}`;
         const storePage = await context.newPage();
-        await storePage.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
-        await storePage.waitForTimeout(4000);
-        await storePage.waitForSelector('[class*="menuItem"], [class*="MenuItem"], [class*="menu-item"]', { timeout: 6000 }).catch(() => {});
+
+        // Hard 10s timeout for store pages
+        await storePage.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 12000 });
+        await storePage.waitForTimeout(2500);
 
         const data = await storePage.evaluate((searchDish) => {
           const dishWords = searchDish.toLowerCase().split(' ').filter(w => w.length > 2);
           const lines = document.body.innerText.split('\n').map(l => l.trim()).filter(l => l);
-
           let deliveryFee = null;
           for (const line of lines) {
             if (/free delivery/i.test(line)) { deliveryFee = 0; break; }
             if (/delivery fee/i.test(line)) { const m = line.match(/\$(\d+\.?\d*)/); if (m) { deliveryFee = parseFloat(m[1]); break; } }
           }
-
           const items = [];
           for (let i = 0; i < lines.length - 1; i++) {
-            const lineL = lines[i].toLowerCase();
-            if (!dishWords.some(w => lineL.includes(w))) continue;
+            if (!dishWords.some(w => lines[i].toLowerCase().includes(w))) continue;
             if (lines[i].length > 100) continue;
             for (let j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
               const m = lines[j].match(/^\$(\d+\.\d{2})$/) || lines[j].match(/^\$(\d+)$/);
@@ -164,25 +146,25 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
 
         await storePage.close();
         const deliveryFee = data.deliveryFee ?? store.deliveryFee;
-        console.log(`[${platform}] ${store.name}: ${data.items.length} items, fee: $${deliveryFee}, rating: ${store.rating}, eta: ${store.eta}`);
+        console.log(`[GrubHub] ${store.name}: ${data.items.length} items, fee: $${deliveryFee}`);
 
         if (data.items.length > 0) {
           data.items.forEach(item => {
             const total = deliveryFee != null ? parseFloat((item.price + deliveryFee).toFixed(2)) : null;
-            results.push({ platform, restaurant: store.name, item: item.name, itemPrice: item.price, deliveryFee, totalPrice: total, rating: store.rating, eta: store.eta, url: page.url() });
+            results.push({ platform: 'GrubHub', restaurant: store.name, item: item.name, itemPrice: item.price, deliveryFee, totalPrice: total, rating: store.rating, eta: store.eta, url: page.url() });
           });
         } else {
-          results.push({ platform, restaurant: store.name, item: dish, itemPrice: null, deliveryFee, totalPrice: null, rating: store.rating, eta: store.eta, url: page.url() });
+          results.push({ platform: 'GrubHub', restaurant: store.name, item: dish, itemPrice: null, deliveryFee, totalPrice: null, rating: store.rating, eta: store.eta, url: page.url() });
         }
       } catch(e) {
-        console.log(`[${platform}] Store failed ${store.name}: ${e.message.split('\n')[0]}`);
-        results.push({ platform, restaurant: store.name, item: dish, itemPrice: null, deliveryFee: store.deliveryFee, totalPrice: null, rating: store.rating, eta: store.eta, url: page.url() });
+        console.log(`[GrubHub] Store failed ${store.name}: ${e.message.split('\n')[0]}`);
+        results.push({ platform: 'GrubHub', restaurant: store.name, item: dish, itemPrice: null, deliveryFee: store.deliveryFee, totalPrice: null, rating: store.rating, eta: store.eta, url: page.url() });
       }
     }
 
-    console.log(`[${platform}] Done: ${results.length} results`);
+    console.log(`[GrubHub] Done: ${results.length} results`);
   } catch (err) {
-    console.error(`[${platform}] Error:`, err.message.split('\n')[0]);
+    console.error(`[GrubHub] Error:`, err.message.split('\n')[0]);
   } finally {
     await browser.close();
   }
@@ -190,7 +172,9 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
 }
 
 async function scrapeSeamless(params) {
-  return scrapeGrubHub({ ...params, platform: 'Seamless' });
+  // Seamless is identical to GrubHub — skip entirely to save time and memory
+  console.log(`[Seamless] Skipping — same backend as GrubHub`);
+  return [];
 }
 
 module.exports = { scrapeGrubHub, scrapeSeamless };

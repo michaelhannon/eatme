@@ -20,113 +20,65 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
   const results = [];
 
   try {
-    // DoorDash Strategy: Use their consumer API directly
-    // After setting address cookie, search returns JSON we can use
-    // First: navigate to homepage, set address, then use their internal search
+    // DoorDash: use their /food-delivery/[city]-[state] browse pages
+    // These don't require login or address entry
+    const dishSlug = dish.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 
-    console.log(`[DoorDash] Loading with address via URL params...`);
+    // Extract city/state from address
+    const locMatch = address.match(/,\s*([^,]+?)\s+([A-Z]{2})\s+\d{5}/);
+    const cityState = locMatch
+      ? `${locMatch[1].toLowerCase().replace(/\s+/g, '-')}-${locMatch[2].toLowerCase()}`
+      : 'oceanport-nj';
 
-    // DoorDash supports delivery address in URL for some pages
-    // Try consumer-facing search that works without login
-    const encodedDish = encodeURIComponent(dish);
+    const urls = [
+      `https://www.doordash.com/food-delivery/${cityState}/${dishSlug}/`,
+      `https://www.doordash.com/food-delivery/${cityState}/pizza/`,  // fallback for specific dishes
+      `https://www.doordash.com/search/store/${encodeURIComponent(dish)}/`,
+    ];
 
-    // Navigate to homepage first to establish session
-    await page.goto('https://www.doordash.com', { waitUntil: 'domcontentloaded', timeout });
-    await page.waitForTimeout(3000);
-
-    // Dismiss any modal/overlay aggressively
-    for (let i = 0; i < 3; i++) {
+    let landed = false;
+    for (const url of urls) {
+      console.log(`[DoorDash] Trying: ${url}`);
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+      await page.waitForTimeout(2500);
       await page.keyboard.press('Escape');
-      await page.waitForTimeout(300);
-    }
+      await page.waitForTimeout(400);
 
-    // Try clicking away from modal
-    await page.mouse.click(640, 50);
-    await page.waitForTimeout(500);
+      // Check if we have store results
+      const storeCount = await page.evaluate(() => document.querySelectorAll('a[href*="/store/"]').length);
+      console.log(`[DoorDash] Store links at ${url}: ${storeCount}`);
 
-    // Look for address input with very broad selector
-    const inputHandle = await page.evaluateHandle(() => {
-      // Find any visible input
-      const inputs = Array.from(document.querySelectorAll('input'));
-      return inputs.find(i => i.offsetWidth > 0 && i.offsetHeight > 0) || null;
-    });
+      if (storeCount > 0) { landed = true; break; }
 
-    if (inputHandle && inputHandle.asElement()) {
-      const el = inputHandle.asElement();
-      const placeholder = await el.evaluate(e => e.placeholder);
-      console.log(`[DoorDash] Found input with placeholder: "${placeholder}"`);
+      // Check if we're on a page asking for address
+      const bodyText = await page.evaluate(() => document.body.innerText.substring(0, 300));
+      console.log(`[DoorDash] Page preview: ${bodyText.substring(0, 100)}`);
 
-      await el.click({ force: true });
-      await el.fill('');
-      await el.type(address, { delay: 40 });
-      await page.waitForTimeout(2000);
-
-      // Log all suggestions
-      const suggestions = await page.evaluate(() => {
-        const items = document.querySelectorAll('li[role="option"], [id*="Suggestion"], [class*="suggestion"]');
-        return Array.from(items).slice(0, 3).map(i => i.innerText?.substring(0, 60));
-      });
-      console.log(`[DoorDash] Suggestions: ${JSON.stringify(suggestions)}`);
-
-      if (suggestions.length > 0) {
-        const firstSuggestion = await page.$('li[role="option"]:first-child, [id*="Suggestion"]:first-child, [class*="suggestion"]:first-child');
-        if (firstSuggestion) {
-          await firstSuggestion.click({ force: true });
-        } else {
-          await page.keyboard.press('ArrowDown');
-          await page.waitForTimeout(300);
-          await page.keyboard.press('Enter');
-        }
-        await page.waitForTimeout(3000);
-        console.log(`[DoorDash] URL after address: ${page.url()}`);
+      // If there's an address input, fill it
+      const addrInput = await page.$('input[id*="address"], input[placeholder*="address"], input[placeholder*="Address"]');
+      if (addrInput) {
+        console.log('[DoorDash] Found address input, filling...');
+        await addrInput.click({ force: true });
+        await addrInput.fill('');
+        await addrInput.type(address, { delay: 40 });
+        await page.waitForTimeout(1800);
+        const sug = await page.$('li[role="option"]:first-child');
+        if (sug) await sug.click({ force: true });
+        else { await page.keyboard.press('ArrowDown'); await page.waitForTimeout(300); await page.keyboard.press('Enter'); }
+        await page.waitForTimeout(2500);
+        landed = true;
+        break;
       }
-    } else {
-      console.log('[DoorDash] No visible input found on homepage');
     }
 
-    // Now search
-    console.log(`[DoorDash] Navigating to search...`);
-    await page.goto(`https://www.doordash.com/search/store/${encodedDish}/`, { waitUntil: 'domcontentloaded', timeout });
-    await page.waitForTimeout(4000);
+    console.log(`[DoorDash] Final URL: ${page.url()}`);
 
-    const searchUrl = page.url();
-    console.log(`[DoorDash] Search URL: ${searchUrl}`);
-
-    const preview = await page.evaluate(() => document.body.innerText.substring(0, 200));
-    console.log(`[DoorDash] Preview: ${preview.substring(0, 150)}`);
-
-    // Log ALL links to understand page structure
-    const allStoreLinks = await page.evaluate(() => {
-      const links = Array.from(document.querySelectorAll('a[href]'));
-      return links
-        .filter(l => l.href.includes('/store/'))
-        .slice(0, 5)
-        .map(l => ({ href: l.getAttribute('href'), text: l.innerText?.substring(0,40) }));
-    });
-    console.log(`[DoorDash] Store links: ${JSON.stringify(allStoreLinks)}`);
-
-    // Also log any restaurant-like links
-    const anyRestLinks = await page.evaluate(() => {
-      const links = Array.from(document.querySelectorAll('a[href]'));
-      return links
-        .filter(l => {
-          const h = l.getAttribute('href') || '';
-          return !h.includes('#') && !h.includes('javascript') && h.length > 5 && l.innerText?.trim().length > 2;
-        })
-        .slice(0, 10)
-        .map(l => ({ href: l.getAttribute('href')?.substring(0,60), text: l.innerText?.substring(0,30) }));
-    });
-    console.log(`[DoorDash] All notable links: ${JSON.stringify(anyRestLinks)}`);
-
-    await page.waitForSelector('a[href*="/store/"]', { timeout: 12000 }).catch(() => console.log('[DoorDash] No store links found after wait'));
+    await page.waitForSelector('a[href*="/store/"]', { timeout: 10000 }).catch(() => {});
 
     const rawCards = await page.evaluate(() => {
       const seen = new Set();
       const out = [];
-
-      // Try store links first
-      const storeLinks = document.querySelectorAll('a[href*="/store/"]');
-      for (const card of storeLinks) {
+      for (const card of document.querySelectorAll('a[href*="/store/"]')) {
         const href = card.getAttribute('href');
         if (!href || seen.has(href)) continue;
         seen.add(href);
@@ -135,14 +87,14 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
         const name = lines[0];
         if (name && name.length > 2 && !name.startsWith('$')) {
           out.push({ href, name, text, lines });
-          if (out.length >= 8) break;
+          if (out.length >= 6) break;
         }
       }
-
       return out;
     });
 
     console.log(`[DoorDash] Found ${rawCards.length} stores`);
+    if (rawCards[0]) console.log(`[DoorDash] Sample: ${JSON.stringify(rawCards[0].lines.slice(0, 6))}`);
 
     const storeData = rawCards.map(card => {
       const text = card.text;
@@ -156,7 +108,6 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
       return { name: card.name, href: card.href, deliveryFee, rating: ratingM ? parseFloat(ratingM[1]) : null, eta: etaM ? etaM[1]?.trim() : null };
     });
 
-    // Sequential fetching to avoid memory crashes
     for (const store of storeData) {
       if (!store.href) {
         results.push({ platform: 'DoorDash', restaurant: store.name, item: dish, itemPrice: null, deliveryFee: store.deliveryFee, totalPrice: null, rating: store.rating, eta: store.eta, url: page.url() });
@@ -165,8 +116,8 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
       try {
         const storeUrl = store.href.startsWith('http') ? store.href : `https://www.doordash.com${store.href}`;
         const storePage = await context.newPage();
-        await storePage.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
-        await storePage.waitForTimeout(3000);
+        await storePage.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 12000 });
+        await storePage.waitForTimeout(2500);
 
         const data = await storePage.evaluate((searchDish) => {
           const dishWords = searchDish.toLowerCase().split(' ').filter(w => w.length > 2);
@@ -179,10 +130,10 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
           const items = [];
           for (let i = 0; i < lines.length - 1; i++) {
             if (!dishWords.some(w => lines[i].toLowerCase().includes(w))) continue;
-            if (lines[i].length > 80) continue;
+            if (lines[i].length > 100) continue;
             for (let j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
               const m = lines[j].match(/^\$(\d+\.\d{2})$/) || lines[j].match(/^\$(\d+)$/);
-              if (m) { const price = parseFloat(m[1]); if (price > 1 && price < 150) { items.push({ name: lines[i].substring(0, 70), price }); break; } }
+              if (m) { const p = parseFloat(m[1]); if (p > 1 && p < 150) { items.push({ name: lines[i].substring(0, 70), price: p }); break; } }
             }
           }
           const seen = new Set();
