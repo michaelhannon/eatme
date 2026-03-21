@@ -22,70 +22,119 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
   const encodedDish = encodeURIComponent(dish);
 
   try {
-    console.log(`[${platform}] Navigating to search...`);
+    // Step 1: Load homepage and set address FIRST
+    console.log(`[${platform}] Loading homepage to set address...`);
+    await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout });
+    await page.waitForTimeout(2500);
+
+    // Dismiss modal
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(600);
+
+    const addressInput = await page.waitForSelector(
+      'input[placeholder*="Enter delivery address"], input[placeholder*="delivery address"], input[placeholder*="address"]',
+      { timeout: 15000 }
+    ).catch(() => null);
+
+    if (addressInput) {
+      await addressInput.click({ force: true });
+      await addressInput.fill('');
+      await addressInput.type(address, { delay: 50 });
+      await page.waitForTimeout(1800);
+
+      const suggestion = await page.$('li[role="option"]:first-child, [data-testid="suggestion-item"]:first-child');
+      if (suggestion) {
+        await suggestion.click({ force: true });
+        console.log(`[${platform}] Address suggestion selected`);
+      } else {
+        await page.keyboard.press('ArrowDown');
+        await page.waitForTimeout(300);
+        await page.keyboard.press('Enter');
+      }
+      await page.waitForTimeout(2500);
+      console.log(`[${platform}] URL after address: ${page.url()}`);
+    } else {
+      console.log(`[${platform}] WARNING: No address input found`);
+    }
+
+    // Step 2: Navigate to search with dish
     await page.goto(`${baseUrl}/food-delivery/search?queryText=${encodedDish}`, { waitUntil: 'domcontentloaded', timeout });
     await page.waitForTimeout(3000);
 
-    const currentUrl = page.url();
-    const title = await page.title();
-    console.log(`[${platform}] URL: ${currentUrl}`);
-    console.log(`[${platform}] Title: ${title}`);
+    console.log(`[${platform}] Search URL: ${page.url()}`);
+    const bodyText = await page.evaluate(() => document.body.innerText.substring(0, 300));
+    console.log(`[${platform}] Page preview: ${bodyText}`);
 
-    const bodyText = await page.evaluate(() => document.body.innerText.substring(0, 500));
-    console.log(`[${platform}] Body preview: ${bodyText}`);
-
-    // Dismiss modal if present
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(500);
-
-    // Handle address redirect
-    if (currentUrl.includes('address') || currentUrl === baseUrl + '/' || currentUrl.includes('home')) {
-      console.log(`[${platform}] Redirected to address entry page`);
-      const addressInput = await page.$('input[placeholder*="Enter delivery address"], input[placeholder*="address"]');
-      if (addressInput) {
-        await addressInput.click({ force: true });
-        await addressInput.fill(address);
-        await page.waitForTimeout(1800);
-        const suggestion = await page.$('li[role="option"]:first-child, [data-testid="suggestion-item"]:first-child');
-        if (suggestion) await suggestion.click({ force: true });
-        else { await page.keyboard.press('ArrowDown'); await page.waitForTimeout(300); await page.keyboard.press('Enter'); }
-        await page.waitForTimeout(2500);
-        await page.goto(`${baseUrl}/food-delivery/search?queryText=${encodedDish}`, { waitUntil: 'domcontentloaded', timeout });
-        await page.waitForTimeout(3000);
-      }
-    }
-
+    // Wait for restaurant cards
     await page.waitForSelector(
       '[class*="restaurant-card"], [class*="RestaurantCard"], [data-testid="restaurant-card"]',
       { timeout: 15000 }
-    ).catch(e => console.log(`[${platform}] No cards found:`, e.message.split('\n')[0]));
+    ).catch(e => console.log(`[${platform}] No cards:`, e.message.split('\n')[0]));
 
+    // Step 3: Scrape restaurant cards
     const cards = await page.$$eval(
       '[class*="restaurant-card"], [class*="RestaurantCard"], [data-testid="restaurant-card"]',
-      (els) => els.slice(0, 15).map(el => {
+      (els) => els.slice(0, 12).map(el => {
         const name = el.querySelector('[class*="restaurant-name"], [class*="RestaurantName"], h3, h4, [class*="name"]')?.innerText?.trim();
         const rating = el.querySelector('[class*="rating"], [class*="Rating"]')?.innerText?.trim();
         const deliveryFee = el.querySelector('[class*="delivery-fee"], [class*="DeliveryFee"], [class*="fee"]')?.innerText?.trim();
         const deliveryTime = el.querySelector('[class*="delivery-time"], [class*="time"], [class*="eta"]')?.innerText?.trim();
-        return { name, rating, deliveryFee, deliveryTime };
+        const href = el.querySelector('a')?.getAttribute('href');
+        return { name, rating, deliveryFee, deliveryTime, href };
       }).filter(c => c.name)
     ).catch(() => []);
 
-    console.log(`[${platform}] Found ${cards.length} restaurant cards`);
+    console.log(`[${platform}] Found ${cards.length} restaurants`);
 
-    cards.forEach(card => {
+    // Step 4: Drill into each restaurant for item price
+    for (const card of cards) {
+      const deliveryFee = parseDeliveryFee(card.deliveryFee);
+      let itemPrice = null;
+
+      if (card.href) {
+        try {
+          const storeUrl = card.href.startsWith('http') ? card.href : `${baseUrl}${card.href}`;
+          const storePage = await context.newPage();
+          await storePage.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
+          await storePage.waitForTimeout(2000);
+
+          const menuItems = await storePage.$$eval(
+            '[class*="menuItem"], [class*="MenuItem"], [data-testid="menu-item"]',
+            (items, searchDish) => {
+              const lowerDish = searchDish.toLowerCase();
+              return items.map(item => {
+                const name = item.querySelector('[class*="name"], [class*="title"]')?.innerText?.trim();
+                const price = item.querySelector('[class*="price"]')?.innerText?.trim();
+                return { name, price };
+              }).filter(i => i.name && i.price && i.name.toLowerCase().includes(lowerDish.split(' ')[0]));
+            },
+            dish
+          ).catch(() => []);
+
+          if (menuItems.length > 0) {
+            itemPrice = parsePrice(menuItems[0].price);
+            console.log(`[${platform}] ${card.name}: ${menuItems[0].name} = ${menuItems[0].price}`);
+          }
+          await storePage.close();
+        } catch(e) {
+          console.log(`[${platform}] Price fetch failed for ${card.name}: ${e.message.split('\n')[0]}`);
+        }
+      }
+
+      const total = (itemPrice != null && deliveryFee != null) ? parseFloat((itemPrice + deliveryFee).toFixed(2)) : null;
+
       results.push({
         platform,
         restaurant: card.name,
         item: dish,
-        itemPrice: null,
-        deliveryFee: parseDeliveryFee(card.deliveryFee),
-        totalPrice: null,
+        itemPrice,
+        deliveryFee,
+        totalPrice: total,
         rating: parseRating(card.rating),
         eta: card.deliveryTime || null,
         url: page.url()
       });
-    });
+    }
 
   } catch (err) {
     console.error(`[${platform}] Scrape error:`, err.message.split('\n')[0]);
@@ -99,6 +148,11 @@ async function scrapeSeamless(params) {
   return scrapeGrubHub({ ...params, platform: 'Seamless' });
 }
 
+function parsePrice(str) {
+  if (!str) return null;
+  const match = str.match(/\$?([\d.]+)/);
+  return match ? parseFloat(match[1]) : null;
+}
 function parseDeliveryFee(str) {
   if (!str) return null;
   if (str.toLowerCase().includes('free')) return 0;
