@@ -81,11 +81,11 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
     for (let i = 0; i < storeData.length; i += CONCURRENCY) {
       const batch = storeData.slice(i, i + CONCURRENCY);
       const batchResults = await Promise.all(batch.map(store => fetchStoreItems(context, store, dish, 'UberEats', 'https://www.ubereats.com')));
-      batchResults.forEach(({ store, items, deliveryFee }) => {
+      batchResults.forEach(({ store, items, deliveryFee, storeLat, storeLng }) => {
         if (items.length > 0) {
           items.forEach(item => {
             const fee = deliveryFee ?? 0;
-            results.push({ platform: 'Uber Eats', restaurant: store.name, item: item.name, itemPrice: item.price, deliveryFee: fee, totalPrice: parseFloat((item.price + fee).toFixed(2)), rating: store.rating, eta: store.eta, distance: store.distance || null, city: store.city || null, url: `https://www.ubereats.com${store.href}` });
+            results.push({ platform: 'Uber Eats', restaurant: store.name, item: item.name, itemPrice: item.price, deliveryFee: fee, totalPrice: parseFloat((item.price + fee).toFixed(2)), rating: store.rating, eta: store.eta, distance: store.distance || null, city: store.city || null, storeLat: storeLat || null, storeLng: storeLng || null, url: `https://www.ubereats.com${store.href}` });
           });
         }
       });

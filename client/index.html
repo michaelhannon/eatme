@@ -378,6 +378,8 @@ function groupByRestaurant(results) {
     if (r.deliveryFee != null && g.deliveryFee == null) g.deliveryFee = r.deliveryFee;
     if (r.rating != null && g.rating == null) g.rating = r.rating;
     if (r.eta != null && g.eta == null) g.eta = r.eta;
+    if (r.distance != null && g.distance == null) g.distance = r.distance;
+    if (r.city != null && g.city == null) g.city = r.city;
   });
   return Array.from(map.values()).map(g => {
     g.items.sort((a,b) => (a.price||999) - (b.price||999));

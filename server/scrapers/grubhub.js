@@ -81,11 +81,11 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
     for (let i = 0; i < storeData.length; i += CONCURRENCY) {
       const batch = storeData.slice(i, i + CONCURRENCY);
       const batchResults = await Promise.all(batch.map(store => fetchStoreItems(context, store, dish, 'GrubHub', 'https://www.grubhub.com')));
-      batchResults.forEach(({ store, items, deliveryFee }) => {
+      batchResults.forEach(({ store, items, deliveryFee, storeLat, storeLng }) => {
         if (items.length > 0) {
           items.forEach(item => {
             const fee = deliveryFee ?? 0;
-            results.push({ platform: 'GrubHub', restaurant: store.name, item: item.name, itemPrice: item.price, deliveryFee: fee, totalPrice: parseFloat((item.price + fee).toFixed(2)), rating: store.rating, eta: store.eta, distance: store.distance || null, city: store.city || null, url: page.url() });
+            results.push({ platform: 'GrubHub', restaurant: store.name, item: item.name, itemPrice: item.price, deliveryFee: fee, totalPrice: parseFloat((item.price + fee).toFixed(2)), rating: store.rating, eta: store.eta, distance: store.distance || null, city: store.city || null, storeLat: storeLat || null, storeLng: storeLng || null, url: page.url() });
           });
         }
       });
@@ -111,6 +111,34 @@ async function fetchStoreItems(context, store, dish, platform, baseUrl) {
     await storePage.waitForSelector('[class*="menuItem"], [class*="MenuItem"], [class*="item-name"]', { timeout: 4000 }).catch(() => {});
 
     const data = await storePage.evaluate((searchDish) => {
+      // Extract restaurant coordinates from JSON-LD or Next.js data
+      let storeLat = null, storeLng = null;
+      try {
+        // Try JSON-LD schema first (most reliable)
+        const jsonLd = Array.from(document.querySelectorAll('script[type="application/ld+json"]'))
+          .map(s => { try { return JSON.parse(s.textContent); } catch(e) { return null; } })
+          .filter(Boolean)
+          .find(d => d['@type'] === 'Restaurant' || d['@type'] === 'FoodEstablishment' || d.geo);
+        if (jsonLd?.geo) { storeLat = parseFloat(jsonLd.geo.latitude); storeLng = parseFloat(jsonLd.geo.longitude); }
+        else if (jsonLd?.location?.geo) { storeLat = parseFloat(jsonLd.location.geo.latitude); storeLng = parseFloat(jsonLd.location.geo.longitude); }
+
+        // Try Next.js __NEXT_DATA__ if JSON-LD didn't work
+        if (!storeLat) {
+          const nextData = document.getElementById('__NEXT_DATA__');
+          if (nextData) {
+            const nd = JSON.parse(nextData.textContent);
+            const walk = (obj, depth = 0) => {
+              if (!obj || typeof obj !== 'object' || depth > 6) return;
+              if (obj.latitude && obj.longitude && Math.abs(obj.latitude) < 90) {
+                storeLat = parseFloat(obj.latitude); storeLng = parseFloat(obj.longitude); return;
+              }
+              for (const v of Object.values(obj)) walk(v, depth + 1);
+            };
+            walk(nd);
+          }
+        }
+      } catch(e) {}
+
       const dishWords = searchDish.toLowerCase().split(' ').filter(w => w.length > 2);
       const expansions = {
         pizza: ['pizza','pie','pepperoni','margherita','sicilian','calzone','stromboli'],
@@ -147,13 +175,15 @@ async function fetchStoreItems(context, store, dish, platform, baseUrl) {
         if (items.length >= 4) break;
       }
       const seen = new Set();
-      return { deliveryFee, items: items.filter(r => { const k=`${r.name}|${r.price}`; if(seen.has(k))return false; seen.add(k); return true; }) };
+      return { deliveryFee, storeLat, storeLng, items: items.filter(r => { const k=`${r.name}|${r.price}`; if(seen.has(k))return false; seen.add(k); return true; }) };
     }, dish);
 
     await storePage.close();
     const deliveryFee = data.deliveryFee ?? store.deliveryFee;
-    console.log(`[${platform}] ${store.name}: ${data.items.length} items, fee: $${deliveryFee}`);
-    return { store, items: data.items, deliveryFee };
+    const storeLat = data.storeLat || null;
+    const storeLng = data.storeLng || null;
+    console.log(`[${platform}] ${store.name}: ${data.items.length} items, fee: $${deliveryFee}${storeLat ? ' [coords found]' : ''}`);
+    return { store, items: data.items, deliveryFee, storeLat, storeLng };
   } catch(e) {
     console.log(`[${platform}] Store failed ${store.name}: ${e.message.split('\n')[0]}`);
     return { store, items: [], deliveryFee: store.deliveryFee };

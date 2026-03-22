@@ -8,6 +8,7 @@ const { scrapeUberEats } = require('./scrapers/ubereats');
 const { aggregate } = require('./aggregator');
 const cache = require('./cache');
 const { geocode } = require('./geocode');
+const { haversine } = require('./haversine');
 const geohash = require('./geohash');
 
 const app = express();
@@ -168,6 +169,17 @@ app.post('/api/search', async (req, res) => {
   // Phase 3: assemble response from cached + fresh results
   // -------------------------------------------------------------------------
   const allRawResults = platforms.map(p => cachedResults[p] || freshResults[p] || []);
+
+  // Calculate distance for any result that has store coords but no distance yet
+  if (resolvedLat && resolvedLng) {
+    for (const result of allRawResults.flat()) {
+      if (!result) continue;
+      if (!result.distance && result.storeLat && result.storeLng) {
+        const dist = haversine(resolvedLat, resolvedLng, result.storeLat, result.storeLng);
+        result.distance = dist + ' mi';
+      }
+    }
+  }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   const servedFromCache = bgPlatforms.length > 0;
