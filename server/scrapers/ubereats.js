@@ -18,15 +18,13 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
   const results = [];
 
   try {
-    // Use coordinates if provided, otherwise fall back to address UI
-    const useLat = lat || 40.32099;
-    const useLng = lng || -74.0269;
-
-    if (lat && lng) {
-      console.log(`[UberEats] Using provided coordinates: ${lat}, ${lng}`);
-    } else {
-      console.log(`[UberEats] No coordinates provided, using address fallback`);
+    if (!lat || !lng) {
+      console.log('[UberEats] No coordinates — skipping (geocode failed upstream)');
+      return [];
     }
+    const useLat = lat;
+    const useLng = lng;
+    console.log(`[UberEats] Using coordinates: ${useLat}, ${useLng}`);
 
     // Encode location into Uber Eats pl param — bypasses address UI entirely
     const plObj = {
