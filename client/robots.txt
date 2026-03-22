@@ -2,7 +2,7 @@ User-agent: *
 Allow: /
 
 # Sitemaps
-Sitemap: https://eatme-production-cf06.up.railway.app/sitemap.xml
+Sitemap: https://www.eatme.tech/sitemap.xml
 
 # Block unnecessary paths
 Disallow: /api/
