@@ -1,6 +1,6 @@
 /**
- * DoorDash scraper — direct API via https-proxy-agent.
- * No browser, no Playwright, no Cloudflare fight.
+ * DoorDash scraper — direct API via https-proxy-agent v5.
+ * Uses the consumer-facing store search API.
  */
 
 const https = require('https');
@@ -12,25 +12,29 @@ function getProxyAgent() {
   const user = process.env.PROXY_USER;
   const pass = process.env.PROXY_PASS;
   if (!host || !port) return null;
-  const auth = user && pass ? `${user}:${pass}@` : '';
-  const url  = `http://${auth}${host}:${port}`;
-  console.log(`[DoorDash] Using proxy: ${host}:${port}`);
-  return new HttpsProxyAgent(url);
+  const auth = user && pass ? `${encodeURIComponent(user)}:${encodeURIComponent(pass)}@` : '';
+  const proxyUrl = `http://${auth}${host}:${port}`;
+  console.log(`[DoorDash] Proxy: ${host}:${port}`);
+  return new HttpsProxyAgent(proxyUrl);
 }
 
 function fetchJson(url, agent) {
   return new Promise((resolve) => {
     const options = {
+      method: 'GET',
       headers: {
-        'User-Agent':        'DoordashConsumer/3.0 CFNetwork/1474 Darwin/23.0.0',
-        'Accept':            'application/json, text/plain, */*',
-        'Accept-Language':   'en-US,en;q=0.9',
-        'x-channel-id':      'doordash',
-        'x-experience-id':   'doordash',
-        'Referer':           'https://www.doordash.com/',
+        'User-Agent':          'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+        'Accept':              'application/json, text/plain, */*',
+        'Accept-Language':     'en-US,en;q=0.9',
+        'Accept-Encoding':     'identity',
+        'x-channel-id':        'doordash',
+        'x-experience-id':     'doordash',
+        'x-dd-version':        '2021-05-01',
+        'Referer':             'https://www.doordash.com/',
+        'Origin':              'https://www.doordash.com',
       },
-      timeout: 12000,
-      ...(agent ? { agent } : {})
+      timeout: 15000,
+      ...(agent ? { agent } : { rejectUnauthorized: false })
     };
 
     const req = https.get(url, options, (res) => {
@@ -39,14 +43,32 @@ function fetchJson(url, agent) {
       res.on('end', () => {
         try {
           const body = Buffer.concat(chunks).toString('utf8');
-          console.log(`[DoorDash] ${url.slice(0,80)} → HTTP ${res.statusCode}, ${body.length} bytes`);
-          if (res.statusCode !== 200) { resolve(null); return; }
+          console.log(`[DoorDash] ${url.slice(30, 90)} → HTTP ${res.statusCode} (${body.length} bytes)`);
+          if (res.statusCode === 301 || res.statusCode === 302) {
+            console.log(`[DoorDash] Redirect to: ${res.headers.location}`);
+            resolve(null); return;
+          }
+          if (res.statusCode !== 200) {
+            console.log(`[DoorDash] Body sample: ${body.slice(0, 200)}`);
+            resolve(null); return;
+          }
           resolve(JSON.parse(body));
-        } catch (e) { resolve(null); }
+        } catch (e) {
+          console.log(`[DoorDash] Parse error: ${e.message}`);
+          resolve(null);
+        }
       });
     });
-    req.on('error', (e) => { console.log(`[DoorDash] fetch error: ${e.message}`); resolve(null); });
-    req.on('timeout', () => { req.destroy(); resolve(null); });
+
+    req.on('error', (e) => {
+      console.log(`[DoorDash] Request error: ${e.message}`);
+      resolve(null);
+    });
+    req.on('timeout', () => {
+      console.log('[DoorDash] Request timed out');
+      req.destroy();
+      resolve(null);
+    });
   });
 }
 
@@ -60,14 +82,23 @@ async function scrapeDoorDash({ address, dish, lat, lng }) {
 
   console.log(`[DoorDash] Searching "${dish}" at ${lat}, ${lng}`);
 
-  // -------------------------------------------------------------------------
-  // Step 1: Store search
-  // -------------------------------------------------------------------------
-  const searchUrl = `https://www.doordash.com/v2/store/search/?lat=${lat}&lng=${lng}&q=${encodeURIComponent(dish)}&limit=10`;
-  const searchData = await fetchJson(searchUrl, agent);
+  // Try multiple known DoorDash API endpoints in order
+  const searchEndpoints = [
+    `https://www.doordash.com/v2/store/search/?lat=${lat}&lng=${lng}&q=${encodeURIComponent(dish)}&limit=10`,
+    `https://www.doordash.com/v1/store/search/?lat=${lat}&lng=${lng}&q=${encodeURIComponent(dish)}&radius=5`,
+    `https://www.doordash.com/api/v1/consumer/store/search/?lat=${lat}&lng=${lng}&q=${encodeURIComponent(dish)}`,
+  ];
+
+  let searchData = null;
+  for (const url of searchEndpoints) {
+    console.log(`[DoorDash] Trying: ${url.slice(0, 80)}`);
+    searchData = await fetchJson(url, agent);
+    if (searchData) break;
+    await new Promise(r => setTimeout(r, 500));
+  }
 
   if (!searchData) {
-    console.log('[DoorDash] ❌ No response from store search API');
+    console.log('[DoorDash] ❌ All search endpoints failed');
     return [];
   }
 
@@ -79,17 +110,15 @@ async function scrapeDoorDash({ address, dish, lat, lng }) {
     (Array.isArray(searchData) ? searchData : []);
 
   console.log(`[DoorDash] Found ${storeList.length} stores`);
-
   if (storeList.length === 0) {
-    console.log('[DoorDash] Response sample:', JSON.stringify(searchData).slice(0, 400));
+    console.log('[DoorDash] Response keys:', Object.keys(searchData));
+    console.log('[DoorDash] Sample:', JSON.stringify(searchData).slice(0, 400));
     return [];
   }
 
-  // -------------------------------------------------------------------------
-  // Step 2: Fetch menu for each store
-  // -------------------------------------------------------------------------
-  const dishWords   = dish.toLowerCase().split(' ').filter(w => w.length > 2);
-  const expansions  = {
+  // Build search word list with expansions
+  const dishWords = dish.toLowerCase().split(' ').filter(w => w.length > 2);
+  const expansions = {
     pizza:   ['pizza','pie','pepperoni','margherita','calzone'],
     burger:  ['burger','cheeseburger','hamburger'],
     pasta:   ['pasta','spaghetti','penne','fettuccine','lasagna'],
@@ -98,6 +127,7 @@ async function scrapeDoorDash({ address, dish, lat, lng }) {
     taco:    ['taco','burrito','quesadilla'],
     sushi:   ['sushi','roll','maki','sashimi'],
     chinese: ['chinese','fried rice','lo mein','chow mein','dumpling','egg roll','wonton','kung pao','general tso','orange chicken'],
+    indian:  ['indian','curry','tikka','masala','biryani','naan','tandoori','korma','saag','paneer'],
   };
   let searchWords = [...dishWords];
   for (const [key, words] of Object.entries(expansions)) {
@@ -117,14 +147,12 @@ async function scrapeDoorDash({ address, dish, lat, lng }) {
     const eta       = store.delivery_time ? `${store.delivery_time} min` :
                       store.deliveryTime  ? `${store.deliveryTime} min`  : null;
 
-    if (!storeId) { console.log(`[DoorDash] Skipping store with no ID: ${storeName}`); continue; }
-
+    if (!storeId) continue;
     await new Promise(r => setTimeout(r, 300));
 
     const menuUrl  = `https://www.doordash.com/v2/store/${storeId}/menu/?query=${encodeURIComponent(dish)}`;
     const menuData = await fetchJson(menuUrl, agent);
-
-    if (!menuData) { console.log(`[DoorDash] ${storeName}: no menu data`); continue; }
+    if (!menuData) { console.log(`[DoorDash] ${storeName}: no menu`); continue; }
 
     const items = [];
     const walk  = (obj, depth = 0) => {
@@ -139,14 +167,18 @@ async function scrapeDoorDash({ address, dish, lat, lng }) {
         }
       }
       for (const v of Object.values(obj)) {
-        if (Array.isArray(v))              v.forEach(i  => walk(i,   depth + 1));
+        if (Array.isArray(v))               v.forEach(i => walk(i, depth + 1));
         else if (v && typeof v === 'object') walk(v, depth + 1);
       }
     };
     walk(menuData);
 
     const seen   = new Set();
-    const unique = items.filter(i => { const k = `${i.name}|${i.price}`; if (seen.has(k)) return false; seen.add(k); return true; });
+    const unique = items.filter(i => {
+      const k = `${i.name}|${i.price}`;
+      if (seen.has(k)) return false;
+      seen.add(k); return true;
+    });
     console.log(`[DoorDash] ${storeName}: ${unique.length} items, fee $${fee ?? 0}`);
 
     if (unique.length > 0) {
