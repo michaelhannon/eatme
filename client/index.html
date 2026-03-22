@@ -3,13 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EatMe — Best Price, Every Platform</title>
+<title>EatMe — Compare Food Delivery Prices</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
   --white: #ffffff;
   --off-white: #faf9f7;
-  --surface: #f4f2ef;
   --border: #e8e4df;
   --border-dark: #d4cfc8;
   --text: #1a1714;
@@ -26,256 +25,189 @@
   --shadow-lg: 0 12px 40px rgba(0,0,0,0.1), 0 4px 12px rgba(0,0,0,0.05);
   --radius: 16px;
   --radius-sm: 10px;
-  --dd: #ff3008; --gh: #f63440; --se: #ff6b35; --ue: #06c167;
+  --gh: #f63440; --ue: #06c167;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: var(--white); color: var(--text); font-family: 'Plus Jakarta Sans', sans-serif; min-height: 100vh; -webkit-font-smoothing: antialiased; }
+body { background: var(--off-white); color: var(--text); font-family: 'Plus Jakarta Sans', sans-serif; min-height: 100vh; -webkit-font-smoothing: antialiased; }
 
 /* HERO */
-.hero { border-bottom: 1px solid var(--border); padding: 48px 24px 44px; }
-.hero-inner { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; }
-@media(max-width:768px){ .hero-inner{ grid-template-columns:1fr; } .hero-visual{ display:none; } }
-
-.hero-eyebrow { display: inline-flex; align-items: center; gap: 8px; background: var(--accent-light); color: var(--accent); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; padding: 6px 12px; border-radius: 20px; margin-bottom: 18px; }
+.hero { background: var(--white); border-bottom: 1px solid var(--border); padding: 52px 24px 48px; }
+.hero-inner { max-width: 960px; margin: 0 auto; text-align: center; }
+.hero-eyebrow { display: inline-flex; align-items: center; gap: 8px; background: var(--accent-light); color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 5px 12px; border-radius: 20px; margin-bottom: 20px; }
 .hero-eyebrow .dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; animation: pulse 2s ease-in-out infinite; }
-@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.7)} }
-h1 { font-family: 'Playfair Display', serif; font-size: clamp(36px,5vw,54px); font-weight: 900; line-height: 1.05; letter-spacing: -.02em; margin-bottom: 14px; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.6)} }
+h1 { font-family: 'Playfair Display', serif; font-size: clamp(32px,5vw,56px); font-weight: 900; line-height: 1.05; letter-spacing: -.02em; margin-bottom: 14px; }
 h1 em { font-style: normal; color: var(--accent); }
-.hero-sub { font-size: 16px; color: var(--text-secondary); line-height: 1.6; max-width: 420px; margin-bottom: 28px; }
-.platform-pills { display: flex; gap: 8px; flex-wrap: wrap; }
-.platform-pill { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 20px; border: 1.5px solid; }
-.platform-pill.dd { color: var(--dd); background: #fff4f3; border-color: #ffd5d1; }
+.hero-sub { font-size: 16px; color: var(--text-secondary); line-height: 1.65; max-width: 500px; margin: 0 auto 28px; }
+.platform-pills { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.platform-pill { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 20px; border: 1.5px solid; }
 .platform-pill.gh { color: var(--gh); background: #fff4f4; border-color: #ffd5d5; }
-.platform-pill.se { color: var(--se); background: #fff6f2; border-color: #ffddd0; }
 .platform-pill.ue { color: var(--ue); background: #f0fdf6; border-color: #b8f0d0; }
 .platform-pill .pip { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-
-/* Hero visual cards */
-.hero-visual { position: relative; height: 320px; }
-.hero-card { position: absolute; background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; box-shadow: var(--shadow-lg); min-width: 230px; }
-.hero-card.c1 { top: 0; left: 20px; animation: float1 4s ease-in-out infinite; }
-.hero-card.c2 { top: 80px; right: 0; animation: float2 4s ease-in-out infinite .8s; }
-.hero-card.c3 { bottom: 10px; left: 40px; animation: float1 4s ease-in-out infinite 1.6s; }
-@keyframes float1 { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
-@keyframes float2 { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
-.hc-pl { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 5px; display:flex;align-items:center;gap:5px; }
-.hc-name { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
-.hc-item { font-size: 12px; color: var(--text-secondary); margin-bottom: 10px; }
-.hc-row { display:flex;align-items:center;justify-content:space-between; }
-.hc-price { font-size: 20px; font-weight: 700; font-family: 'Playfair Display', serif; }
-.hc-price.green { color: var(--green); }
-.hc-badge { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; background: var(--green-light); color: var(--green); }
-.hc-rating { font-size: 12px; color: var(--text-secondary); }
+.platform-pill.coming-soon { color: var(--text-muted); background: var(--off-white); border-color: var(--border); opacity: .7; }
 
 /* SEARCH */
-.search-section { background: var(--off-white); border-bottom: 1px solid var(--border); padding: 24px; position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow-sm); }
-.search-inner { max-width: 1100px; margin: 0 auto; }
-.search-bar { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end; }
-@media(max-width:768px){ .search-bar{ grid-template-columns:1fr; } }
-.field-group { display: flex; flex-direction: column; gap: 6px; }
-.field-label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
-.field-input { background: var(--white); border: 1.5px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-family: 'Plus Jakarta Sans', sans-serif; font-size: 15px; font-weight: 500; padding: 12px 16px; width: 100%; outline: none; transition: border-color .15s, box-shadow .15s; box-shadow: var(--shadow-sm); }
-.field-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,69,0,.08); }
+.search-section { background: var(--white); border-bottom: 1px solid var(--border); padding: 20px 24px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+.search-inner { max-width: 960px; margin: 0 auto; }
+.search-bar { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: end; }
+@media(max-width:700px){ .search-bar{ grid-template-columns:1fr; } }
+.field-group { display: flex; flex-direction: column; gap: 5px; }
+.field-label { font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--text-muted); }
+.field-input { background: var(--off-white); border: 1.5px solid var(--border); border-radius: var(--radius-sm); color: var(--text); font-family: 'Plus Jakarta Sans', sans-serif; font-size: 14px; font-weight: 500; padding: 10px 14px; width: 100%; outline: none; transition: all .15s; }
+.field-input:focus { border-color: var(--accent); background: var(--white); box-shadow: 0 0 0 3px rgba(255,69,0,.08); }
 .field-input::placeholder { color: var(--text-muted); font-weight: 400; }
-.search-btn { background: var(--accent); border: none; border-radius: var(--radius-sm); color: white; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 15px; font-weight: 700; padding: 12px 28px; cursor: pointer; transition: all .15s; white-space: nowrap; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(255,69,0,.3); height: 48px; }
-.search-btn:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(255,69,0,.35); }
+.addr-wrap { display: flex; gap: 6px; }
+.addr-wrap .field-input { flex: 1; }
+.loc-btn { height: 42px; width: 42px; flex-shrink: 0; background: var(--off-white); border: 1.5px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; font-size: 16px; transition: all .15s; display: flex; align-items: center; justify-content: center; }
+.loc-btn:hover { border-color: var(--accent); background: var(--accent-light); }
+.search-btn { background: var(--accent); border: none; border-radius: var(--radius-sm); color: white; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 14px; font-weight: 700; padding: 0 24px; cursor: pointer; transition: all .15s; white-space: nowrap; display: flex; align-items: center; gap: 7px; box-shadow: 0 3px 10px rgba(255,69,0,.28); height: 42px; }
+.search-btn:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 5px 16px rgba(255,69,0,.35); }
 .search-btn:disabled { background: var(--border-dark); color: var(--text-muted); cursor: not-allowed; transform: none; box-shadow: none; }
-
-.platform-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
-.platform-row-label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
-.ptoggle { display: flex; align-items: center; gap: 6px; background: var(--white); border: 1.5px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-secondary); transition: all .15s; user-select: none; }
+.platform-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.platform-row-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
+.ptoggle { display: flex; align-items: center; gap: 5px; background: var(--off-white); border: 1.5px solid var(--border); border-radius: 7px; padding: 5px 10px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text-secondary); transition: all .15s; user-select: none; }
 .ptoggle input { display: none; }
-.ptoggle .pip { width: 8px; height: 8px; border-radius: 50%; }
-.ptoggle.dd .pip { background: var(--dd); } .ptoggle.gh .pip { background: var(--gh); } .ptoggle.se .pip { background: var(--se); } .ptoggle.ue .pip { background: var(--ue); }
-.ptoggle.dd.active { color: var(--dd); background: #fff4f3; border-color: var(--dd); }
+.ptoggle .pip { width: 7px; height: 7px; border-radius: 50%; }
+.ptoggle.gh .pip { background: var(--gh); }
+.ptoggle.ue .pip { background: var(--ue); }
 .ptoggle.gh.active { color: var(--gh); background: #fff4f4; border-color: var(--gh); }
-.ptoggle.se.active { color: var(--se); background: #fff6f2; border-color: var(--se); }
 .ptoggle.ue.active { color: var(--ue); background: #f0fdf6; border-color: var(--ue); }
 
 /* MAIN */
-.main { max-width: 1100px; margin: 0 auto; padding: 36px 24px 80px; }
+.main { max-width: 960px; margin: 0 auto; padding: 28px 24px 80px; }
 
 /* Loading */
-.loading { display: none; text-align: center; padding: 80px 0; }
+.loading { display: none; text-align: center; padding: 72px 0; }
 .loading.active { display: block; }
-.loading-spinner { display: flex; justify-content: center; gap: 6px; margin-bottom: 20px; }
-.loading-spinner span { width: 10px; height: 10px; background: var(--accent); border-radius: 50%; animation: bounce 1.2s ease-in-out infinite; }
-.loading-spinner span:nth-child(2) { animation-delay: .15s; background: var(--gh); }
-.loading-spinner span:nth-child(3) { animation-delay: .3s; background: var(--ue); }
-.loading-spinner span:nth-child(4) { animation-delay: .45s; background: var(--gold); }
+.loading-spinner { display: flex; justify-content: center; gap: 7px; margin-bottom: 18px; }
+.loading-spinner span { width: 11px; height: 11px; border-radius: 50%; animation: bounce 1.2s ease-in-out infinite; }
+.loading-spinner span:nth-child(1) { background: var(--gh); }
+.loading-spinner span:nth-child(2) { animation-delay: .15s; background: var(--ue); }
+.loading-spinner span:nth-child(3) { animation-delay: .3s; background: var(--gold); }
 @keyframes bounce { 0%,80%,100%{transform:scale(0)} 40%{transform:scale(1)} }
-.loading-text { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
-.loading-sub { font-size: 14px; color: var(--text-muted); }
-.platform-loading { display: flex; justify-content: center; gap: 20px; margin-top: 24px; flex-wrap: wrap; }
-.pl-item { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--text-secondary); }
-.pl-dot { width: 8px; height: 8px; border-radius: 50%; animation: pulse 1.5s ease-in-out infinite; }
+.loading-title { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+.loading-sub { font-size: 13px; color: var(--text-muted); }
+.loading-platforms { display: flex; justify-content: center; gap: 24px; margin-top: 28px; }
+.lp-item { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.lp-badge { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 5px; }
+.lp-badge.gh { background: #fff4f4; color: var(--gh); }
+.lp-badge.ue { background: #f0fdf6; color: var(--ue); }
+.lp-status { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+.lp-bar { width: 80px; height: 3px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.lp-bar-fill { height: 100%; border-radius: 3px; animation: barPulse 1.5s ease-in-out infinite; }
+.lp-bar-fill.gh { background: var(--gh); }
+.lp-bar-fill.ue { background: var(--ue); }
+@keyframes barPulse { 0%{width:0%} 50%{width:100%} 100%{width:0%;margin-left:100%} }
 
 /* Error */
-.error-box { display: none; background: #fff4f3; border: 1px solid #ffd5d1; border-radius: var(--radius-sm); padding: 16px 20px; color: #c0392b; font-size: 14px; font-weight: 500; margin-bottom: 24px; }
-.error-box.active { display: flex; align-items: center; gap: 10px; }
+.error-box { display: none; background: #fff4f3; border: 1px solid #ffd5d1; border-radius: var(--radius-sm); padding: 14px 18px; color: #c0392b; font-size: 13px; font-weight: 500; margin-bottom: 20px; }
+.error-box.active { display: flex; align-items: center; gap: 8px; }
 
-/* Summary */
-.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 32px; }
-.summary-card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow-sm); transition: box-shadow .15s; }
-.summary-card:hover { box-shadow: var(--shadow-md); }
+/* Summary cards */
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 28px; }
+.summary-card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow-sm); transition: box-shadow .15s, transform .15s; }
+.summary-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .summary-card.winner { background: var(--green-light); border-color: #86efac; }
-.summary-label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }
-.summary-value { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 700; color: var(--text); line-height: 1; margin-bottom: 4px; }
+.summary-label { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 7px; }
+.summary-value { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; color: var(--text); line-height: 1; margin-bottom: 3px; }
 .summary-value.green { color: var(--green); }
 .summary-value.gold { color: var(--gold); }
-.summary-sub { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+.summary-sub { font-size: 11px; color: var(--text-secondary); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* Results */
+/* Results header */
 #results { display: none; }
 #results.active { display: block; }
-.results-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
-.results-title { font-family: 'Playfair Display', serif; font-size: 26px; font-weight: 700; }
+.results-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+.results-title { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 700; }
 .results-title span { color: var(--accent); }
-.sort-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.sort-label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
-.sort-btn { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13px; font-weight: 600; background: var(--white); border: 1.5px solid var(--border); color: var(--text-secondary); padding: 7px 14px; border-radius: 8px; cursor: pointer; transition: all .15s; }
+.results-count { font-size: 12px; color: var(--text-muted); font-weight: 500; margin-top: 2px; }
+.sort-controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.sort-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
+.sort-btn { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px; font-weight: 600; background: var(--white); border: 1.5px solid var(--border); color: var(--text-secondary); padding: 6px 12px; border-radius: 7px; cursor: pointer; transition: all .15s; }
 .sort-btn:hover { border-color: var(--border-dark); color: var(--text); }
 .sort-btn.active { background: var(--text); color: var(--white); border-color: var(--text); }
-.results-count { font-size: 13px; color: var(--text-muted); font-weight: 500; }
 
 /* Restaurant rows */
-.restaurant-list { display: flex; flex-direction: column; gap: 8px; }
-
-.restaurant-row {
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-  box-shadow: var(--shadow-sm);
-  transition: box-shadow .15s;
-  animation: slideUp .3s ease both;
-}
+.restaurant-list { display: flex; flex-direction: column; gap: 6px; }
+.restaurant-row { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); transition: box-shadow .15s, transform .15s; animation: slideUp .25s ease both; }
 .restaurant-row:hover { box-shadow: var(--shadow-md); }
-.restaurant-row.winner { border-color: var(--green); background: linear-gradient(to right, var(--green-light), var(--white) 60%); }
-@keyframes slideUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+.restaurant-row.winner { border-color: var(--green); background: linear-gradient(105deg, var(--green-light) 0%, var(--white) 55%); }
+@keyframes slideUp { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
 
-/* Main row — always visible */
-.row-main {
-  display: grid;
-  grid-template-columns: auto 1fr auto auto auto auto auto;
-  align-items: center;
-  gap: 20px;
-  padding: 18px 22px;
-  cursor: pointer;
-  transition: background .1s;
-}
-.row-main:hover { background: rgba(0,0,0,.015); }
-@media(max-width:900px){ .row-main{ grid-template-columns: auto 1fr auto; gap:12px; } .row-main .price-cell:nth-child(n+4){ display:none; } }
+.row-main { display: grid; grid-template-columns: auto 1fr auto auto auto auto auto; align-items: center; gap: 16px; padding: 16px 20px; cursor: pointer; transition: background .1s; }
+.row-main:hover { background: rgba(0,0,0,.018); }
+@media(max-width:800px){ .row-main{ grid-template-columns:auto 1fr auto; } .price-cell:nth-child(n+4){ display:none; } }
 
-.platform-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 6px; white-space: nowrap; letter-spacing: .03em; flex-shrink: 0; }
-.platform-badge.doordash { background: #fff4f3; color: var(--dd); border: 1px solid #ffd5d1; }
+.platform-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 5px; white-space: nowrap; letter-spacing: .03em; flex-shrink: 0; }
 .platform-badge.grubhub { background: #fff4f4; color: var(--gh); border: 1px solid #ffd5d5; }
-.platform-badge.seamless { background: #fff6f2; color: var(--se); border: 1px solid #ffddd0; }
 .platform-badge.ubereats { background: #f0fdf6; color: var(--ue); border: 1px solid #b8f0d0; }
 
 .restaurant-info { min-width: 0; }
-.restaurant-name-row { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
-.restaurant-name { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.winner-badge { font-size: 10px; font-weight: 700; background: var(--green); color: white; padding: 2px 7px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; }
-.best-item-name { font-size: 12px; color: var(--text-muted); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.item-count-badge { font-size: 11px; font-weight: 600; color: var(--accent); background: var(--accent-light); padding: 1px 7px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; cursor: pointer; }
+.restaurant-name-row { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; flex-wrap: wrap; }
+.restaurant-name { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.winner-badge { font-size: 9px; font-weight: 700; background: var(--green); color: white; padding: 2px 6px; border-radius: 3px; white-space: nowrap; flex-shrink: 0; letter-spacing: .04em; text-transform: uppercase; }
+.item-count-badge { font-size: 10px; font-weight: 600; color: var(--accent); background: var(--accent-light); padding: 1px 6px; border-radius: 8px; white-space: nowrap; flex-shrink: 0; }
+.best-item-name { font-size: 11px; color: var(--text-muted); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-.price-cell { text-align: right; min-width: 70px; }
-.price-cell-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin-bottom: 3px; }
-.price-val { font-family: 'Playfair Display', serif; font-size: 17px; font-weight: 700; color: var(--text); }
-.price-val.na { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 14px; color: var(--border-dark); font-weight: 400; }
-.price-val.free { color: var(--green); font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13px; font-weight: 700; }
+.price-cell { text-align: right; min-width: 64px; }
+.price-cell-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); margin-bottom: 2px; }
+.price-val { font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 700; color: var(--text); }
+.price-val.na { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13px; color: var(--border-dark); font-weight: 400; }
+.price-val.free { color: var(--green); font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px; font-weight: 700; }
 .price-val.total-best { color: var(--green); }
 .price-val.total { color: var(--accent); }
-.rating-val { display: flex; align-items: center; justify-content: flex-end; gap: 3px; font-size: 13px; font-weight: 600; }
-.star { color: var(--gold); font-size: 12px; }
-.eta-val { font-size: 13px; font-weight: 600; color: var(--text-secondary); text-align: right; white-space: nowrap; }
+.rating-val { display: flex; align-items: center; justify-content: flex-end; gap: 3px; font-size: 12px; font-weight: 600; }
+.star { color: var(--gold); font-size: 11px; }
+.eta-val { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-align: right; white-space: nowrap; }
 
-/* Expand button */
-.expand-btn { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--text-muted); background: none; border: 1.5px solid var(--border); border-radius: 7px; padding: 5px 10px; cursor: pointer; transition: all .15s; white-space: nowrap; flex-shrink: 0; }
-.expand-btn:hover { border-color: var(--accent); color: var(--accent); }
-.expand-btn .chevron { transition: transform .2s; }
-.expand-btn.open .chevron { transform: rotate(180deg); }
+/* Expand chevron */
+.chevron-wrap { color: var(--text-muted); font-size: 11px; transition: transform .2s; flex-shrink: 0; }
+.row-main.expanded .chevron-wrap { transform: rotate(180deg); }
 
-/* Expanded items panel */
-.items-panel {
-  display: none;
-  border-top: 1px solid var(--border);
-  background: var(--off-white);
-  padding: 0;
-}
+/* Items panel */
+.items-panel { display: none; border-top: 1px solid var(--border); background: var(--off-white); }
 .items-panel.open { display: block; }
-.items-panel-inner { padding: 16px 22px; }
-.items-panel-header { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 12px; }
-
-.item-rows { display: flex; flex-direction: column; gap: 6px; }
-.item-row {
-  display: grid;
-  grid-template-columns: 1fr auto auto auto;
-  align-items: center;
-  gap: 16px;
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 11px 16px;
-  transition: border-color .15s;
-}
+.items-panel-inner { padding: 14px 20px; }
+.items-panel-header { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px; }
+.item-rows { display: flex; flex-direction: column; gap: 5px; }
+.item-row { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 14px; background: var(--white); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; transition: border-color .15s; }
 .item-row:hover { border-color: var(--border-dark); }
 .item-row.best-item { border-color: var(--green); background: var(--green-light); }
-.item-name { font-size: 14px; font-weight: 600; color: var(--text); }
-.item-price { font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 700; color: var(--text); text-align: right; }
-.item-fee { font-size: 12px; font-weight: 600; text-align: right; }
+.item-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.item-price { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 700; text-align: right; }
+.item-fee { font-size: 11px; font-weight: 600; text-align: right; }
 .item-fee.free { color: var(--green); }
 .item-fee.paid { color: var(--text-secondary); }
-.item-total { font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 700; text-align: right; }
+.item-total { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 700; text-align: right; }
 .item-total.green { color: var(--green); }
 .item-total.orange { color: var(--accent); }
-.item-best-badge { font-size: 10px; font-weight: 700; background: var(--green); color: white; padding: 1px 6px; border-radius: 4px; }
+.item-best-badge { font-size: 9px; font-weight: 700; background: var(--green); color: white; padding: 1px 5px; border-radius: 3px; margin-left: 6px; text-transform: uppercase; letter-spacing: .04em; }
+
+/* View button */
+.view-btn { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--accent); text-decoration: none; padding: 4px 8px; border: 1.5px solid var(--accent-light); border-radius: 6px; margin-top: 10px; transition: all .15s; }
+.view-btn:hover { background: var(--accent); color: white; }
 
 /* Empty state */
-.empty-state { text-align: center; padding: 80px 20px; }
-.empty-icon { font-size: 48px; margin-bottom: 16px; }
-.empty-title { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: 700; margin-bottom: 8px; }
-.empty-sub { font-size: 15px; color: var(--text-secondary); }
+.empty-state { text-align: center; padding: 72px 20px; }
+.empty-icon { font-size: 44px; margin-bottom: 14px; }
+.empty-title { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+.empty-sub { font-size: 14px; color: var(--text-secondary); }
 
-footer { border-top: 1px solid var(--border); padding: 20px 24px; text-align: center; }
-footer p { font-size: 12px; color: var(--text-muted); }
+footer { border-top: 1px solid var(--border); padding: 18px 24px; text-align: center; background: var(--white); }
+footer p { font-size: 11px; color: var(--text-muted); }
 </style>
 </head>
 <body>
 
 <section class="hero">
   <div class="hero-inner">
-    <div>
-      <div class="hero-eyebrow"><div class="dot"></div>Real-time price comparison</div>
-      <h1>Find the <em>best price</em><br>before you order.</h1>
-      <p class="hero-sub">We search DoorDash, GrubHub, Seamless, and Uber Eats simultaneously and show you the best deal — by restaurant, by item.</p>
-      <div class="platform-pills">
-        <div class="platform-pill dd"><div class="pip"></div>DoorDash</div>
-        <div class="platform-pill gh"><div class="pip"></div>GrubHub</div>
-        <div class="platform-pill se"><div class="pip"></div>Seamless</div>
-        <div class="platform-pill ue"><div class="pip"></div>Uber Eats</div>
-      </div>
-    </div>
-    <div class="hero-visual">
-      <div class="hero-card c1">
-        <div class="hc-pl"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ue)"></span>Uber Eats</div>
-        <div class="hc-name">Maurizio's Pizzeria</div>
-        <div class="hc-item">Penne with Vodka Sauce</div>
-        <div class="hc-row"><div class="hc-price green">$12.55</div><div class="hc-badge">Best value</div></div>
-      </div>
-      <div class="hero-card c2">
-        <div class="hc-pl"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--dd)"></span>DoorDash</div>
-        <div class="hc-name">Tony's Pizza</div>
-        <div class="hc-item">Large Cheese Pizza</div>
-        <div class="hc-row"><div class="hc-price">$18.49</div><div class="hc-rating">★ 4.7</div></div>
-      </div>
-      <div class="hero-card c3">
-        <div class="hc-pl"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--gh)"></span>GrubHub</div>
-        <div class="hc-name">Willow Deli</div>
-        <div class="hc-item">Grilled Chicken Wrap</div>
-        <div class="hc-row"><div class="hc-price">$12.63</div><div class="hc-rating">★ 4.8</div></div>
-      </div>
+    <div class="hero-eyebrow"><div class="dot"></div>Real-time price comparison</div>
+    <h1>Stop overpaying<br>for <em>delivery.</em></h1>
+    <p class="hero-sub">We search GrubHub and Uber Eats simultaneously and show you who has the best price — by restaurant, by item, right now.</p>
+    <div class="platform-pills">
+      <div class="platform-pill gh"><div class="pip"></div>GrubHub</div>
+      <div class="platform-pill ue"><div class="pip"></div>Uber Eats</div>
+      <div class="platform-pill coming-soon">DoorDash — coming soon</div>
     </div>
   </div>
 </section>
@@ -285,28 +217,26 @@ footer p { font-size: 12px; color: var(--text-muted); }
     <div class="search-bar">
       <div class="field-group">
         <label class="field-label">What are you craving?</label>
-        <input class="field-input" id="dish" type="text" placeholder="vodka chicken wrap, pizza, pad thai..." />
+        <input class="field-input" id="dish" type="text" placeholder="pizza, pad thai, chicken wings..." />
       </div>
       <div class="field-group">
         <label class="field-label">Deliver to</label>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input class="field-input" id="address" type="text" value="86 Horsneck Point Rd, Oceanport NJ 07757" style="flex:1" />
-          <button onclick="detectLocation()" id="locBtn" title="Use my location" style="height:48px;width:48px;flex-shrink:0;background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:18px;transition:all .15s;box-shadow:var(--shadow-sm);" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">📍</button>
+        <div class="addr-wrap">
+          <input class="field-input" id="address" type="text" value="86 Horsneck Point Rd, Oceanport NJ 07757" />
+          <button class="loc-btn" id="locBtn" onclick="detectLocation()" title="Use my location">📍</button>
         </div>
       </div>
       <div class="field-group">
         <label class="field-label" style="opacity:0">Go</label>
         <button class="search-btn" id="searchBtn" onclick="runSearch()">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           Compare Prices
         </button>
       </div>
     </div>
     <div class="platform-row">
       <span class="platform-row-label">Platforms:</span>
-      <label class="ptoggle dd active" onclick="togglePlatform(this)"><input type="checkbox" value="doordash" checked><div class="pip"></div>DoorDash</label>
       <label class="ptoggle gh active" onclick="togglePlatform(this)"><input type="checkbox" value="grubhub" checked><div class="pip"></div>GrubHub</label>
-      <label class="ptoggle se active" onclick="togglePlatform(this)"><input type="checkbox" value="seamless" checked><div class="pip"></div>Seamless</label>
       <label class="ptoggle ue active" onclick="togglePlatform(this)"><input type="checkbox" value="ubereats" checked><div class="pip"></div>Uber Eats</label>
     </div>
   </div>
@@ -314,15 +244,26 @@ footer p { font-size: 12px; color: var(--text-muted); }
 
 <main class="main">
   <div class="error-box" id="errorBox">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
     <span id="errorText"></span>
   </div>
 
   <div class="loading" id="loading">
-    <div class="loading-spinner"><span></span><span></span><span></span><span></span></div>
-    <div class="loading-text" id="loadingMsg">Searching all platforms simultaneously...</div>
-    <div class="loading-sub">Running browsers in parallel — about 30–45 seconds</div>
-    <div class="platform-loading" id="platformLoading"></div>
+    <div class="loading-spinner"><span></span><span></span><span></span></div>
+    <div class="loading-title" id="loadingMsg">Searching all platforms...</div>
+    <div class="loading-sub">Comparing live prices — usually under 45 seconds</div>
+    <div class="loading-platforms">
+      <div class="lp-item">
+        <div class="lp-badge gh">GrubHub</div>
+        <div class="lp-bar"><div class="lp-bar-fill gh"></div></div>
+        <div class="lp-status">Searching...</div>
+      </div>
+      <div class="lp-item">
+        <div class="lp-badge ue">Uber Eats</div>
+        <div class="lp-bar"><div class="lp-bar-fill ue"></div></div>
+        <div class="lp-status">Searching...</div>
+      </div>
+    </div>
   </div>
 
   <div id="results">
@@ -333,8 +274,8 @@ footer p { font-size: 12px; color: var(--text-muted); }
         <div class="results-count" id="resultsCount"></div>
       </div>
       <div class="sort-controls">
-        <span class="sort-label">Sort by:</span>
-        <button class="sort-btn active" data-sort="totalPrice" onclick="sortResults('totalPrice')">Best total price</button>
+        <span class="sort-label">Sort:</span>
+        <button class="sort-btn active" data-sort="totalPrice" onclick="sortResults('totalPrice')">Best price</button>
         <button class="sort-btn" data-sort="itemPrice" onclick="sortResults('itemPrice')">Item price</button>
         <button class="sort-btn" data-sort="rating" onclick="sortResults('rating')">Rating</button>
         <button class="sort-btn" data-sort="eta" onclick="sortResults('eta')">Fastest</button>
@@ -346,19 +287,27 @@ footer p { font-size: 12px; color: var(--text-muted); }
   <div class="empty-state" id="emptyState">
     <div class="empty-icon">🍕</div>
     <div class="empty-title">What are you hungry for?</div>
-    <div class="empty-sub">Enter a dish above and we'll find the best price across all platforms.</div>
+    <div class="empty-sub">Enter a dish above to compare prices across GrubHub and Uber Eats.</div>
   </div>
 </main>
 
-<footer><p>EatMe compares live prices across DoorDash, GrubHub, Seamless, and Uber Eats. Prices may vary by location and time.</p></footer>
+<footer><p>EatMe compares live prices across GrubHub and Uber Eats. Prices and availability may vary. DoorDash support coming soon.</p></footer>
 
 <script>
-let allResults = [];       // flat array from API
-let restaurants = [];      // grouped by restaurant
+let allResults = [];
+let restaurants = [];
 let currentSort = 'totalPrice';
-let loadingInterval;
+let userLat = null;
+let userLng = null;
 
-const LOADING_MSGS = ['Launching browsers on all platforms...','DoorDash: entering your address...','GrubHub + Seamless: searching...','Uber Eats: pulling live prices...','Ranking results by total cost...'];
+const LOADING_MSGS = [
+  'Searching GrubHub and Uber Eats...',
+  'Pulling live menu prices...',
+  'Checking delivery fees...',
+  'Ranking results by total cost...',
+  'Almost done...'
+];
+let loadingInterval;
 
 function togglePlatform(label) {
   const cb = label.querySelector('input');
@@ -370,18 +319,16 @@ function getSelectedPlatforms() {
   return [...document.querySelectorAll('.ptoggle input:checked')].map(i => i.value);
 }
 
-function startLoading(platforms) {
+function startLoading() {
   let i = 0;
   document.getElementById('loadingMsg').textContent = LOADING_MSGS[0];
-  loadingInterval = setInterval(() => { i = (i+1)%LOADING_MSGS.length; document.getElementById('loadingMsg').textContent = LOADING_MSGS[i]; }, 2200);
-  const colors = {doordash:'var(--dd)',grubhub:'var(--gh)',seamless:'var(--se)',ubereats:'var(--ue)'};
-  const names = {doordash:'DoorDash',grubhub:'GrubHub',seamless:'Seamless',ubereats:'Uber Eats'};
-  document.getElementById('platformLoading').innerHTML = platforms.map(p => `<div class="pl-item"><div class="pl-dot" style="background:${colors[p]}"></div><span>${names[p]}</span></div>`).join('');
+  loadingInterval = setInterval(() => {
+    i = (i + 1) % LOADING_MSGS.length;
+    document.getElementById('loadingMsg').textContent = LOADING_MSGS[i];
+  }, 3000);
 }
-
 function stopLoading() { clearInterval(loadingInterval); }
 
-// Group flat results by restaurant+platform
 function groupByRestaurant(results) {
   const map = new Map();
   results.forEach(r => {
@@ -390,19 +337,13 @@ function groupByRestaurant(results) {
       map.set(key, { platform: r.platform, restaurant: r.restaurant, rating: r.rating, eta: r.eta, deliveryFee: r.deliveryFee, items: [], url: r.url });
     }
     const g = map.get(key);
-    if (r.itemPrice != null) {
-      g.items.push({ name: r.item, price: r.itemPrice, deliveryFee: r.deliveryFee, total: r.totalPrice });
-    }
-    // Update fee/rating/eta if we have better data
+    if (r.itemPrice != null) g.items.push({ name: r.item, price: r.itemPrice, total: r.totalPrice });
     if (r.deliveryFee != null && g.deliveryFee == null) g.deliveryFee = r.deliveryFee;
     if (r.rating != null && g.rating == null) g.rating = r.rating;
     if (r.eta != null && g.eta == null) g.eta = r.eta;
   });
-
   return Array.from(map.values()).map(g => {
-    // Sort items by price
     g.items.sort((a,b) => (a.price||999) - (b.price||999));
-    // Best item = lowest priced
     g.bestItem = g.items[0] || null;
     g.bestPrice = g.bestItem?.price ?? null;
     g.bestTotal = g.bestItem?.total ?? (g.bestItem?.price != null && g.deliveryFee != null ? parseFloat((g.bestItem.price + g.deliveryFee).toFixed(2)) : null);
@@ -412,20 +353,15 @@ function groupByRestaurant(results) {
 
 function sortRestaurants(groups, by) {
   return [...groups].sort((a,b) => {
-    switch(by) {
-      case 'itemPrice': return (a.bestPrice??999)-(b.bestPrice??999);
-      case 'rating': return (b.rating??0)-(a.rating??0);
-      case 'eta': return parseEta(a.eta)-parseEta(b.eta);
-      case 'totalPrice':
-      default:
-        if (a.bestTotal==null && b.bestTotal==null) return (a.bestPrice??999)-(b.bestPrice??999);
-        if (a.bestTotal==null) return 1;
-        if (b.bestTotal==null) return -1;
-        return a.bestTotal-b.bestTotal;
-    }
+    if (by === 'itemPrice') return (a.bestPrice??999)-(b.bestPrice??999);
+    if (by === 'rating') return (b.rating??0)-(a.rating??0);
+    if (by === 'eta') return parseEta(a.eta)-parseEta(b.eta);
+    if (a.bestTotal==null && b.bestTotal==null) return (a.bestPrice??999)-(b.bestPrice??999);
+    if (a.bestTotal==null) return 1;
+    if (b.bestTotal==null) return -1;
+    return a.bestTotal-b.bestTotal;
   });
 }
-
 function parseEta(eta) { if(!eta) return 999; const m=eta.match(/(\d+)/); return m?parseInt(m[1]):999; }
 
 async function runSearch() {
@@ -439,7 +375,7 @@ async function runSearch() {
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('loading').classList.add('active');
   document.getElementById('searchBtn').disabled = true;
-  startLoading(platforms);
+  startLoading();
 
   try {
     const res = await fetch('/api/search', {
@@ -455,7 +391,8 @@ async function runSearch() {
     renderRestaurants(restaurants, currentSort);
     document.getElementById('results').classList.add('active');
   } catch(e) {
-    showError('Could not connect to the server: ' + e.message);
+    showError('Search failed: ' + e.message);
+    document.getElementById('emptyState').style.display = 'block';
   } finally {
     stopLoading();
     document.getElementById('loading').classList.remove('active');
@@ -467,66 +404,67 @@ function renderSummary(summary, elapsed, dish) {
   if (!summary) return;
   const h = summary.highlights;
   const cards = [];
-  if (h.bestValue) cards.push(`<div class="summary-card winner"><div class="summary-label">🏆 Best total price</div><div class="summary-value green">$${h.bestValue.totalPrice?.toFixed(2)??'—'}</div><div class="summary-sub">${h.bestValue.restaurant} · ${h.bestValue.platform}</div></div>`);
-  if (h.lowestItemPrice) cards.push(`<div class="summary-card"><div class="summary-label">💰 Lowest item price</div><div class="summary-value">$${h.lowestItemPrice.itemPrice?.toFixed(2)??'—'}</div><div class="summary-sub">${h.lowestItemPrice.restaurant} · ${h.lowestItemPrice.platform}</div></div>`);
-  if (h.bestRated) cards.push(`<div class="summary-card"><div class="summary-label">⭐ Highest rated</div><div class="summary-value gold">${h.bestRated.rating}</div><div class="summary-sub">${h.bestRated.restaurant} · ${h.bestRated.platform}</div></div>`);
-  if (h.fastestDelivery) cards.push(`<div class="summary-card"><div class="summary-label">⚡ Fastest delivery</div><div class="summary-value">${h.fastestDelivery.eta}</div><div class="summary-sub">${h.fastestDelivery.restaurant} · ${h.fastestDelivery.platform}</div></div>`);
-  cards.push(`<div class="summary-card"><div class="summary-label">🔍 Search time</div><div class="summary-value">${elapsed}s</div><div class="summary-sub">${summary.totalResults} items · ${restaurants.length} restaurants</div></div>`);
+  if (h?.bestValue) cards.push(`<div class="summary-card winner"><div class="summary-label">🏆 Best total price</div><div class="summary-value green">$${h.bestValue.totalPrice?.toFixed(2)??'—'}</div><div class="summary-sub">${h.bestValue.restaurant}</div></div>`);
+  if (h?.lowestItemPrice) cards.push(`<div class="summary-card"><div class="summary-label">💰 Cheapest item</div><div class="summary-value">$${h.lowestItemPrice.itemPrice?.toFixed(2)??'—'}</div><div class="summary-sub">${h.lowestItemPrice.restaurant}</div></div>`);
+  if (h?.bestRated) cards.push(`<div class="summary-card"><div class="summary-label">⭐ Highest rated</div><div class="summary-value gold">${h.bestRated.rating}</div><div class="summary-sub">${h.bestRated.restaurant}</div></div>`);
+  if (h?.fastestDelivery) cards.push(`<div class="summary-card"><div class="summary-label">⚡ Fastest</div><div class="summary-value">${h.fastestDelivery.eta}</div><div class="summary-sub">${h.fastestDelivery.restaurant}</div></div>`);
+  cards.push(`<div class="summary-card"><div class="summary-label">🔍 Search time</div><div class="summary-value">${elapsed}s</div><div class="summary-sub">${restaurants.length} restaurants found</div></div>`);
   document.getElementById('summaryGrid').innerHTML = cards.join('');
   document.getElementById('resultsTitle').innerHTML = `Results for <span>"${dish}"</span>`;
+  document.getElementById('resultsCount').textContent = `${restaurants.length} restaurant${restaurants.length!==1?'s':''} · ${summary.totalResults} items`;
 }
 
 function renderRestaurants(groups, sortBy) {
   const sorted = sortRestaurants(groups, sortBy);
   const list = document.getElementById('restaurantList');
-  document.getElementById('resultsCount').textContent = `${sorted.length} restaurant${sorted.length!==1?'s':''} found`;
 
   if (!sorted.length) {
-    list.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No results found</div><div class="empty-sub">Try a different dish or check the server logs.</div></div>`;
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No results found</div><div class="empty-sub">Try a different dish or broader search term.</div></div>`;
     return;
   }
 
   list.innerHTML = sorted.map((g, i) => {
-    const slug = g.platform.toLowerCase().replace(/\s+/g,'');
+    const slug = g.platform === 'Uber Eats' ? 'ubereats' : 'grubhub';
     const isWinner = i === 0 && g.bestTotal != null;
     const hasItems = g.items.length > 0;
-    const itemCount = g.items.length;
-
-    // Best item display
     const bestItem = g.bestItem;
-    const bestItemName = bestItem?.name || '—';
-    const bestItemPrice = bestItem?.price != null ? `$${bestItem.price.toFixed(2)}` : '—';
-    const feeDisplay = g.deliveryFee != null ? (g.deliveryFee === 0 ? '<span class="price-val free">Free</span>' : `<span class="price-val">$${g.deliveryFee.toFixed(2)}</span>`) : '<span class="price-val na">—</span>';
+
+    const feeDisplay = g.deliveryFee != null
+      ? (g.deliveryFee === 0 ? '<span class="price-val free">Free</span>' : `<span class="price-val">$${g.deliveryFee.toFixed(2)}</span>`)
+      : '<span class="price-val na">—</span>';
+
     const totalDisplay = g.bestTotal != null
       ? `<span class="price-val ${isWinner?'total-best':'total'}">$${g.bestTotal.toFixed(2)}</span>`
-      : g.bestPrice != null && g.deliveryFee != null
-        ? `<span class="price-val total">$${(g.bestPrice+g.deliveryFee).toFixed(2)}</span>`
-        : '<span class="price-val na">—</span>';
+      : '<span class="price-val na">—</span>';
 
-    // Items panel HTML
     const itemsHTML = hasItems ? g.items.map((item, ii) => {
       const isBest = ii === 0;
       const itemTotal = item.total ?? (item.price != null && g.deliveryFee != null ? parseFloat((item.price + g.deliveryFee).toFixed(2)) : null);
-      const feeHtml = g.deliveryFee != null ? (g.deliveryFee === 0 ? '<span class="item-fee free">Free delivery</span>' : `<span class="item-fee paid">+$${g.deliveryFee.toFixed(2)} delivery</span>`) : '<span class="item-fee paid">Delivery fee unknown</span>';
-      const totalHtml = itemTotal != null ? `<span class="item-total ${isBest?'green':'orange'}">$${itemTotal.toFixed(2)}</span>` : '<span class="item-total" style="color:var(--text-muted)">—</span>';
+      const feeHtml = g.deliveryFee != null
+        ? (g.deliveryFee === 0 ? '<span class="item-fee free">Free delivery</span>' : `<span class="item-fee paid">+$${g.deliveryFee.toFixed(2)}</span>`)
+        : '<span class="item-fee paid">—</span>';
+      const totalHtml = itemTotal != null
+        ? `<span class="item-total ${isBest?'green':'orange'}">$${itemTotal.toFixed(2)}</span>`
+        : '<span class="item-total" style="color:var(--text-muted)">—</span>';
       return `<div class="item-row ${isBest?'best-item':''}">
-        <div class="item-name">${item.name}${isBest?'<span class="item-best-badge" style="margin-left:8px">Best price</span>':''}</div>
+        <div class="item-name">${item.name}${isBest?'<span class="item-best-badge">Best</span>':''}</div>
         <div class="item-price">$${item.price.toFixed(2)}</div>
         ${feeHtml}
         ${totalHtml}
       </div>`;
-    }).join('') : `<div style="padding:12px 0;font-size:13px;color:var(--text-muted)">No individual item prices found — <a href="${g.url}" target="_blank" style="color:var(--accent)">view on ${g.platform}</a></div>`;
+    }).join('') + `<a href="${g.url}" target="_blank" class="view-btn">View on ${g.platform} ↗</a>`
+    : '';
 
-    return `<div class="restaurant-row ${isWinner?'winner':''}" style="animation-delay:${i*35}ms">
+    return `<div class="restaurant-row ${isWinner?'winner':''}" style="animation-delay:${i*30}ms">
       <div class="row-main" onclick="toggleExpand(this)">
         <span class="platform-badge ${slug}">${g.platform}</span>
         <div class="restaurant-info">
           <div class="restaurant-name-row">
             <span class="restaurant-name">${g.restaurant}</span>
             ${isWinner?'<span class="winner-badge">Best value</span>':''}
-            ${hasItems?`<span class="item-count-badge">${itemCount} item${itemCount!==1?'s':''}</span>`:''}
+            ${hasItems?`<span class="item-count-badge">${g.items.length} item${g.items.length!==1?'s':''}</span>`:''}
           </div>
-          <div class="best-item-name">${bestItemName}</div>
+          <div class="best-item-name">${bestItem?.name || '—'}</div>
         </div>
         <div class="price-cell"><div class="price-cell-label">Item</div>${bestItem?`<div class="price-val">$${bestItem.price.toFixed(2)}</div>`:'<div class="price-val na">—</div>'}</div>
         <div class="price-cell"><div class="price-cell-label">Delivery</div>${feeDisplay}</div>
@@ -534,12 +472,7 @@ function renderRestaurants(groups, sortBy) {
         <div class="price-cell"><div class="price-cell-label">Rating</div>${g.rating!=null?`<div class="rating-val"><span class="star">★</span>${g.rating}</div>`:'<div class="price-val na">—</div>'}</div>
         <div class="price-cell"><div class="price-cell-label">ETA</div><div class="eta-val">${g.eta||'—'}</div></div>
       </div>
-      ${hasItems?`<div class="items-panel" id="panel-${i}">
-        <div class="items-panel-inner">
-          <div class="items-panel-header">All matching items · <span style="color:var(--accent)">${g.restaurant}</span></div>
-          <div class="item-rows">${itemsHTML}</div>
-        </div>
-      </div>`:''}
+      ${hasItems?`<div class="items-panel" id="panel-${i}"><div class="items-panel-inner"><div class="items-panel-header">All matching items · <strong>${g.restaurant}</strong></div><div class="item-rows">${itemsHTML}</div></div></div>`:''}
     </div>`;
   }).join('');
 }
@@ -549,15 +482,8 @@ function toggleExpand(rowMain) {
   const panel = row.querySelector('.items-panel');
   if (!panel) return;
   const isOpen = panel.classList.contains('open');
-  // Close all others
-  document.querySelectorAll('.items-panel.open').forEach(p => {
-    p.classList.remove('open');
-    p.closest('.restaurant-row').querySelector('.row-main').style.background = '';
-  });
-  if (!isOpen) {
-    panel.classList.add('open');
-    rowMain.style.background = 'rgba(0,0,0,0.02)';
-  }
+  document.querySelectorAll('.items-panel.open').forEach(p => { p.classList.remove('open'); p.closest('.restaurant-row').querySelector('.row-main').classList.remove('expanded'); });
+  if (!isOpen) { panel.classList.add('open'); rowMain.classList.add('expanded'); }
 }
 
 function sortResults(col) {
@@ -578,60 +504,34 @@ function showError(msg) {
   document.getElementById('errorBox').classList.add('active');
 }
 
-// Store user coordinates
-let userLat = null;
-let userLng = null;
-
 async function detectLocation() {
   const btn = document.getElementById('locBtn');
-  const addrInput = document.getElementById('address');
-  
-  if (!navigator.geolocation) {
-    showError('Geolocation is not supported by your browser.');
-    return;
-  }
-
+  if (!navigator.geolocation) { showError('Geolocation not supported by your browser.'); return; }
   btn.textContent = '⏳';
   btn.disabled = true;
-
   navigator.geolocation.getCurrentPosition(
-    async (position) => {
-      userLat = position.coords.latitude;
-      userLng = position.coords.longitude;
-      
+    async (pos) => {
+      userLat = pos.coords.latitude;
+      userLng = pos.coords.longitude;
       try {
-        // Reverse geocode using free Nominatim API
         const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${userLat}&lon=${userLng}&format=json`);
         const data = await res.json();
-        const addr = data.display_name || `${userLat.toFixed(5)}, ${userLng.toFixed(5)}`;
-        // Format nicely: house number + road + city + state + zip
         const a = data.address || {};
-        const formatted = [
-          a.house_number, a.road,
-          a.city || a.town || a.village,
-          a.state,
-          a.postcode
-        ].filter(Boolean).join(', ');
-        addrInput.value = formatted || addr;
-        btn.textContent = '✅';
-        setTimeout(() => { btn.textContent = '📍'; btn.disabled = false; }, 2000);
+        const formatted = [a.house_number, a.road, a.city||a.town||a.village, a.state, a.postcode].filter(Boolean).join(', ');
+        document.getElementById('address').value = formatted || `${userLat.toFixed(5)}, ${userLng.toFixed(5)}`;
       } catch(e) {
-        addrInput.value = `${userLat.toFixed(5)}, ${userLng.toFixed(5)}`;
-        btn.textContent = '✅';
-        setTimeout(() => { btn.textContent = '📍'; btn.disabled = false; }, 2000);
+        document.getElementById('address').value = `${userLat.toFixed(5)}, ${userLng.toFixed(5)}`;
       }
+      btn.textContent = '✅';
+      setTimeout(() => { btn.textContent = '📍'; btn.disabled = false; }, 2000);
     },
-    (err) => {
-      btn.textContent = '📍';
-      btn.disabled = false;
-      showError('Could not get your location. Please enter your address manually.');
-    },
+    () => { btn.textContent = '📍'; btn.disabled = false; showError('Could not get your location.'); },
     { timeout: 10000, enableHighAccuracy: true }
   );
 }
 
 document.addEventListener('keydown', e => {
-  if (e.key==='Enter' && !document.getElementById('searchBtn').disabled) runSearch();
+  if (e.key === 'Enter' && !document.getElementById('searchBtn').disabled) runSearch();
 });
 </script>
 </body>

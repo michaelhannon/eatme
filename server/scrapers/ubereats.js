@@ -73,7 +73,7 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
       eta: card.eta, deliveryFee: null
     }));
 
-    const CONCURRENCY = 3;
+    const CONCURRENCY = 5;
     for (let i = 0; i < storeData.length; i += CONCURRENCY) {
       const batch = storeData.slice(i, i + CONCURRENCY);
       const batchResults = await Promise.all(batch.map(store => fetchStoreItems(context, store, dish, 'UberEats', 'https://www.ubereats.com')));

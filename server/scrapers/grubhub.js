@@ -71,7 +71,7 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
     });
 
     // 3 parallel store visits per batch
-    const CONCURRENCY = 3;
+    const CONCURRENCY = 5;
     for (let i = 0; i < storeData.length; i += CONCURRENCY) {
       const batch = storeData.slice(i, i + CONCURRENCY);
       const batchResults = await Promise.all(batch.map(store => fetchStoreItems(context, store, dish, 'GrubHub', 'https://www.grubhub.com')));
