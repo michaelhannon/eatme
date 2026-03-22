@@ -7,6 +7,7 @@ const { scrapeGrubHub, scrapeSeamless } = require('./scrapers/grubhub');
 const { scrapeUberEats } = require('./scrapers/ubereats');
 const { aggregate } = require('./aggregator');
 const cache = require('./cache');
+const { geocode } = require('./geocode');
 const geohash = require('./geohash');
 
 const app = express();
@@ -82,8 +83,23 @@ app.post('/api/search', async (req, res) => {
   // Fall back to a hash of the address string when coords are missing.
   const parsedLat = lat ? parseFloat(lat) : null;
   const parsedLng = lng ? parseFloat(lng) : null;
-  const geoKey = (parsedLat != null && parsedLng != null)
-    ? geohash.encode(parsedLat, parsedLng, 6)
+  // If coords weren't sent (user typed address manually), geocode it now.
+  // Every scraper needs coordinates — no hardcoded fallbacks allowed.
+  let resolvedLat = parsedLat;
+  let resolvedLng = parsedLng;
+  if (resolvedLat == null || resolvedLng == null) {
+    console.log(`[Geocode] No coords supplied — geocoding "${address}"...`);
+    const geo = await geocode(address);
+    if (geo) {
+      resolvedLat = geo.lat;
+      resolvedLng = geo.lng;
+    } else {
+      console.warn('[Geocode] Failed — scraper results may be inaccurate');
+    }
+  }
+
+  const geoKey = (resolvedLat != null && resolvedLng != null)
+    ? geohash.encode(resolvedLat, resolvedLng, 6)
     : _addressHash(address);
 
   const creds = {
@@ -95,8 +111,8 @@ app.post('/api/search', async (req, res) => {
   const scraperConfig = {
     address,
     dish,
-    lat: parsedLat,
-    lng: parsedLng,
+    lat: resolvedLat,
+    lng: resolvedLng,
     headless: true,
     timeout: parseInt(process.env.SCRAPE_TIMEOUT_MS || '45000'),
     credentials: null // set per-platform below

@@ -21,9 +21,12 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
   const results = [];
 
   try {
-    // Go directly to search URL with known Oceanport NJ coordinates
-    const useLat = lat || 40.32098388;
-    const useLng = lng || -74.02689362;
+    if (!lat || !lng) {
+      console.log('[GrubHub] No coordinates — skipping (geocode failed upstream)');
+      return [];
+    }
+    const useLat = lat;
+    const useLng = lng;
     console.log(`[GrubHub] Using coordinates: ${useLat}, ${useLng}`);
     const searchUrl = `https://www.grubhub.com/search?orderMethod=delivery&locationMode=DELIVERY&facetSet=umamiV6&pageSize=20&hideHateos=true&searchMetrics=true&queryText=${encodeURIComponent(dish)}&latitude=${useLat}&longitude=${useLng}&preciseLocation=true&sortSetId=umamiV3&countOmittingTimes=true`;
     await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout });
