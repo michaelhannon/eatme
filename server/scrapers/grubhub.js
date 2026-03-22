@@ -75,8 +75,15 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
     ).catch(() => null);
 
     if (searchInput) {
-      await searchInput.click();
-      await searchInput.fill(dish);
+      // Use force click and JS fill to avoid overlay issues
+      await searchInput.evaluate(el => el.click());
+      await page.waitForTimeout(300);
+      await searchInput.evaluate((el, val) => {
+        el.value = val;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }, dish);
+      await page.waitForTimeout(500);
       await page.keyboard.press('Enter');
       await page.waitForTimeout(4000);
       console.log(`[GrubHub] Search URL: ${page.url()}`);
