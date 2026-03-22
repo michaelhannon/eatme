@@ -57,7 +57,11 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
         if (!name || name.length < 2) continue;
         const ratingLine = lines.find(l => /^[45]\.\d$/.test(l));
         const etaMatch = fullText.match(/(\d+[\s\u2013\-]+\d+\s*min|\d+\s*min)/i);
-        out.push({ href, name, ratingLine, eta: etaMatch?.[1]?.trim() || null, deliveryFee: null });
+        const distMatch = fullText.match(/([\d.]+)\s*mi\b/i);
+        // Uber Eats often shows "Restaurant Name (City, ST)" or city on a separate line
+        const cityMatch = fullText.match(/([A-Z][a-zA-Z\s]+),\s*([A-Z]{2})\b/) || name.match(/\(([^)]+)\)/);
+        const city = cityMatch ? (cityMatch[2] ? cityMatch[1].trim() + ', ' + cityMatch[2] : cityMatch[1].trim()) : null;
+        out.push({ href, name, ratingLine, eta: etaMatch?.[1]?.trim() || null, deliveryFee: null, distance: distMatch ? distMatch[1] + ' mi' : null, city });
         if (out.length >= 8) break;
       }
       return out;
@@ -68,7 +72,9 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
     const storeData = rawCards.map(card => ({
       name: card.name, href: card.href,
       rating: card.ratingLine ? parseFloat(card.ratingLine) : null,
-      eta: card.eta, deliveryFee: null
+      eta: card.eta, deliveryFee: null,
+      distance: card.distance || null,
+      city: card.city || null
     }));
 
     const CONCURRENCY = 5;
@@ -79,7 +85,7 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
         if (items.length > 0) {
           items.forEach(item => {
             const fee = deliveryFee ?? 0;
-            results.push({ platform: 'Uber Eats', restaurant: store.name, item: item.name, itemPrice: item.price, deliveryFee: fee, totalPrice: parseFloat((item.price + fee).toFixed(2)), rating: store.rating, eta: store.eta, url: `https://www.ubereats.com${store.href}` });
+            results.push({ platform: 'Uber Eats', restaurant: store.name, item: item.name, itemPrice: item.price, deliveryFee: fee, totalPrice: parseFloat((item.price + fee).toFixed(2)), rating: store.rating, eta: store.eta, distance: store.distance || null, city: store.city || null, url: `https://www.ubereats.com${store.href}` });
           });
         }
       });

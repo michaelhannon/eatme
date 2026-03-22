@@ -70,7 +70,10 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
       else { const m = text.match(/\$(\d+\.?\d*)\s*delivery/i); if (m) deliveryFee = parseFloat(m[1]); }
       const ratingM = text.match(/\b([45]\.\d)\s*[\(\d]/);
       const etaM = text.match(/•\s*(\d+[\s–\-]+\d+\s*min|\d+\s*min)/i) || text.match(/(\d+[\s–\-]+\d+\s*min|\d+\s*min)/i);
-      return { name: card.name, href: card.href, deliveryFee, rating: ratingM ? parseFloat(ratingM[1]) : null, eta: etaM?.[1]?.trim() || null };
+      const distM = text.match(/([\d.]+)\s*mi\b/i);
+      // City: look for a line that looks like "City, ST" or just "City" after the restaurant name
+      const cityM = text.match(/([A-Z][a-zA-Z\s]+),?\s*(NJ|NY|CT|PA|MA|CA|TX|FL|IL|GA|WA|CO|AZ|OH|NC|VA|MD|[A-Z]{2})\b/);
+      return { name: card.name, href: card.href, deliveryFee, rating: ratingM ? parseFloat(ratingM[1]) : null, eta: etaM?.[1]?.trim() || null, distance: distM ? distM[1] + ' mi' : null, city: cityM ? cityM[1].trim() + ', ' + cityM[2] : null };
     });
 
     // 3 parallel store visits per batch
@@ -82,7 +85,7 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
         if (items.length > 0) {
           items.forEach(item => {
             const fee = deliveryFee ?? 0;
-            results.push({ platform: 'GrubHub', restaurant: store.name, item: item.name, itemPrice: item.price, deliveryFee: fee, totalPrice: parseFloat((item.price + fee).toFixed(2)), rating: store.rating, eta: store.eta, url: page.url() });
+            results.push({ platform: 'GrubHub', restaurant: store.name, item: item.name, itemPrice: item.price, deliveryFee: fee, totalPrice: parseFloat((item.price + fee).toFixed(2)), rating: store.rating, eta: store.eta, distance: store.distance || null, city: store.city || null, url: page.url() });
           });
         }
       });
