@@ -175,7 +175,14 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
             results.push({ platform: 'GrubHub', restaurant: store.name, item: item.name, itemPrice: item.price, deliveryFee, totalPrice: total, rating: store.rating, eta: store.eta, url: page.url() });
           });
         } else {
-          results.push({ platform: 'GrubHub', restaurant: store.name, item: dish, itemPrice: null, deliveryFee, totalPrice: null, rating: store.rating, eta: store.eta, url: page.url() });
+          // Only show restaurant without items if its name suggests it serves the dish
+          const dishWords = dish.toLowerCase().split(' ').filter(w => w.length > 2);
+          const nameMatchesDish = dishWords.some(w => store.name.toLowerCase().includes(w));
+          if (nameMatchesDish) {
+            results.push({ platform: 'GrubHub', restaurant: store.name, item: dish, itemPrice: null, deliveryFee, totalPrice: null, rating: store.rating, eta: store.eta, url: page.url() });
+          } else {
+            console.log(`[GrubHub] Skipping ${store.name} — no items found and name doesn't match dish`);
+          }
         }
       } catch(e) {
         console.log(`[GrubHub] Store failed ${store.name}: ${e.message.split('\n')[0]}`);

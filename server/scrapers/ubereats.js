@@ -24,22 +24,52 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
   try {
     console.log(`[UberEats] Setting address...`);
     await page.goto('https://www.ubereats.com', { waitUntil: 'domcontentloaded', timeout });
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(2500);
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(500);
 
-    const addressInput = await page.$('input[type="text"]');
+    // Wait for any visible text input
+    await page.waitForFunction(() => {
+      return Array.from(document.querySelectorAll('input[type="text"], input:not([type])'))
+        .some(i => i.offsetWidth > 0 && i.offsetHeight > 0);
+    }, { timeout: 10000 }).catch(() => {});
+
+    const inputHandle = await page.evaluateHandle(() =>
+      Array.from(document.querySelectorAll('input[type="text"], input:not([type])'))
+        .find(i => i.offsetWidth > 0 && i.offsetHeight > 0) || null
+    );
+    const addressInput = inputHandle.asElement();
+
     if (addressInput) {
+      const placeholder = await addressInput.evaluate(el => el.placeholder);
+      console.log(`[UberEats] Found input: "${placeholder}"`);
       await addressInput.click({ force: true });
       await addressInput.fill('');
-      await addressInput.type(address, { delay: 40 });
-      await page.waitForTimeout(1800);
+      await addressInput.type(address, { delay: 50 });
+      await page.waitForTimeout(2000);
+
+      // Wait for suggestions to appear
+      await page.waitForSelector('li[role="option"]', { timeout: 5000 }).catch(() => {});
+      const suggestions = await page.evaluate(() =>
+        Array.from(document.querySelectorAll('li[role="option"]')).slice(0,3).map(s => s.innerText?.substring(0,60))
+      );
+      console.log(`[UberEats] Suggestions: ${JSON.stringify(suggestions)}`);
+
       const suggestion = await page.$('li[role="option"]:first-child');
-      if (suggestion) await suggestion.click({ force: true });
-      else { await page.keyboard.press('ArrowDown'); await page.waitForTimeout(200); await page.keyboard.press('Enter'); }
-      await page.waitForTimeout(1500);
+      if (suggestion) {
+        await suggestion.click({ force: true });
+        console.log('[UberEats] Clicked address suggestion');
+      } else {
+        await page.keyboard.press('ArrowDown');
+        await page.waitForTimeout(300);
+        await page.keyboard.press('Enter');
+      }
+      await page.waitForTimeout(2000);
       const confirmBtn = await page.$('button:has-text("Deliver here"), button:has-text("Confirm")');
       if (confirmBtn) { await confirmBtn.click({ force: true }); await page.waitForTimeout(800); }
+      console.log(`[UberEats] URL after address: ${page.url()}`);
+    } else {
+      console.log('[UberEats] No address input found');
     }
 
     await page.goto(`https://www.ubereats.com/search?q=${encodeURIComponent(dish)}`, { waitUntil: 'domcontentloaded', timeout });
@@ -134,7 +164,14 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
             results.push({ platform: 'Uber Eats', restaurant: store.name, item: item.name, itemPrice: item.price, deliveryFee: data.deliveryFee, totalPrice: total, rating: store.rating, eta: store.eta, url: `https://www.ubereats.com${store.href}` });
           });
         } else {
-          results.push({ platform: 'Uber Eats', restaurant: store.name, item: dish, itemPrice: null, deliveryFee: data.deliveryFee, totalPrice: null, rating: store.rating, eta: store.eta, url: `https://www.ubereats.com${store.href}` });
+          // Only show if restaurant name suggests it serves the dish
+          const dishWords = dish.toLowerCase().split(' ').filter(w => w.length > 2);
+          const nameMatchesDish = dishWords.some(w => store.name.toLowerCase().includes(w));
+          if (nameMatchesDish) {
+            results.push({ platform: 'Uber Eats', restaurant: store.name, item: dish, itemPrice: null, deliveryFee: data.deliveryFee, totalPrice: null, rating: store.rating, eta: store.eta, url: `https://www.ubereats.com${store.href}` });
+          } else {
+            console.log(`[UberEats] Skipping ${store.name} — no items and name doesn't match dish`);
+          }
         }
       } catch(e) {
         console.log(`[UberEats] Store failed ${store.name}: ${e.message.split('\n')[0]}`);
