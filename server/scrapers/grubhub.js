@@ -99,8 +99,10 @@ async function fetchStoreItems(context, store, dish, platform, baseUrl) {
   try {
     const storeUrl = store.href.startsWith('http') ? store.href : `${baseUrl}${store.href}`;
     const storePage = await context.newPage();
-    await storePage.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
-    await storePage.waitForTimeout(2000);
+    await storePage.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 12000 });
+    await storePage.waitForTimeout(2500);
+    // Wait for menu items to render
+    await storePage.waitForSelector('[class*="menuItem"], [class*="MenuItem"], [class*="item-name"]', { timeout: 4000 }).catch(() => {});
 
     const data = await storePage.evaluate((searchDish) => {
       const dishWords = searchDish.toLowerCase().split(' ').filter(w => w.length > 2);
