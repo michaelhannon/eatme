@@ -4,7 +4,7 @@
  */
 
 const https = require('https');
-const { HttpsProxyAgent } = require('https-proxy-agent');
+const HttpsProxyAgent = require('https-proxy-agent');
 
 function getProxyAgent() {
   const host = process.env.PROXY_HOST;
