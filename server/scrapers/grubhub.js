@@ -1,31 +1,17 @@
 const { chromium } = require('playwright');
 
-function getProxyConfig() {
-  const host = process.env.PROXY_HOST;
-  const port = process.env.PROXY_PORT;
-  const user = process.env.PROXY_USER;
-  const pass = process.env.PROXY_PASS;
-  if (!host || !port) return null;
-  return { server: `http://${host}:${port}`, username: user, password: pass };
-}
-
 async function scrapeGrubHub({ address, dish, credentials, headless = true, timeout = 45000, platform = 'GrubHub' }) {
   if (platform === 'Seamless') {
     console.log(`[Seamless] Skipping — same backend as GrubHub`);
     return [];
   }
 
-  const proxy = getProxyConfig();
-  if (proxy) console.log(`[GrubHub] Using proxy: ${proxy.server}`);
-
   const browser = await chromium.launch({
     headless,
-    ...(proxy && { proxy }),
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled']
   });
 
   const context = await browser.newContext({
-    ...(proxy && { proxy }),
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
     viewport: { width: 1280, height: 800 },
     extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' }
@@ -45,7 +31,6 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
     await page.keyboard.press('Escape');
     await page.waitForTimeout(500);
 
-    // Wait for visible input
     await page.waitForFunction(() => {
       return Array.from(document.querySelectorAll('input')).some(i => i.offsetWidth > 0 && i.offsetHeight > 0);
     }, { timeout: 8000 }).catch(() => {});
@@ -68,40 +53,28 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
       console.log(`[GrubHub] After address: ${page.url()}`);
     }
 
-    // Search using search bar
     const searchInput = await page.waitForSelector(
       'input[placeholder*="Search"], input[placeholder*="search"], input[name="search"]',
       { timeout: 10000 }
     ).catch(() => null);
 
     if (searchInput) {
-      // Use force click and JS fill to avoid overlay issues
-      await searchInput.evaluate(el => el.click());
-      await page.waitForTimeout(300);
       await searchInput.evaluate((el, val) => {
+        el.click();
         el.value = val;
         el.dispatchEvent(new Event('input', { bubbles: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
       }, dish);
       await page.waitForTimeout(500);
       await page.keyboard.press('Enter');
-      await page.waitForTimeout(4000);
+      await page.waitForTimeout(5000);
       console.log(`[GrubHub] Search URL: ${page.url()}`);
     }
 
-    // Wait longer for search results to render
-    await page.waitForTimeout(3000);
-
-    // Log page content to understand structure
-    const preview = await page.evaluate(() => document.body.innerText.substring(0, 400));
-    console.log(`[GrubHub] Page preview: ${preview.substring(0, 200)}`);
-
-    // Wait for restaurant links to appear
     await page.waitForSelector('a[href*="/restaurant/"]', { timeout: 10000 }).catch(() => {
-      console.log('[GrubHub] No restaurant links found after wait');
+      console.log('[GrubHub] No restaurant links found');
     });
 
-    // Count links
     const linkCount = await page.evaluate(() => document.querySelectorAll('a[href*="/restaurant/"]').length);
     console.log(`[GrubHub] Restaurant link count: ${linkCount}`);
 
@@ -113,13 +86,11 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
         const href = link.getAttribute('href');
         if (!href || seen.has(href)) continue;
         seen.add(href);
-        // Walk up to find container with full info
         let container = link;
         for (let i = 0; i < 8; i++) {
           if (!container.parentElement) break;
           container = container.parentElement;
-          const lines = (container.innerText || '').split('\n').filter(l => l.trim()).length;
-          if (lines >= 3) break;
+          if ((container.innerText || '').split('\n').filter(l => l.trim()).length >= 3) break;
         }
         const text = container.innerText || link.innerText || '';
         const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
@@ -133,7 +104,7 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
     });
 
     console.log(`[GrubHub] Found ${rawCards.length} restaurants`);
-    if (rawCards[0]) console.log(`[GrubHub] Sample: ${JSON.stringify(rawCards[0].lines.slice(0,8))}`);
+    if (rawCards[0]) console.log(`[GrubHub] Sample: ${JSON.stringify(rawCards[0].lines.slice(0,6))}`);
 
     const storeData = rawCards.map(card => {
       const text = card.text;
@@ -169,7 +140,6 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
             if (/delivery fee/i.test(line)) { const m = line.match(/\$(\d+\.?\d*)/); if (m) { deliveryFee = parseFloat(m[1]); break; } }
           }
           const items = [];
-          // Strategy 1: exact match
           for (let i = 0; i < lines.length - 1; i++) {
             if (!dishWords.some(w => lines[i].toLowerCase().includes(w))) continue;
             if (lines[i].length > 100) continue;
@@ -178,12 +148,10 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
               if (m) { const p = parseFloat(m[1]); if (p > 1 && p < 150) { items.push({ name: lines[i].substring(0, 70), price: p }); break; } }
             }
           }
-          // Strategy 2: related food words
           if (items.length === 0) {
-            const foodWords = ['pizza', 'pie', 'pepperoni', 'chicken', 'burger', 'wrap', 'sandwich', 'pasta', 'soup', 'salad', 'calzone', 'stromboli'];
+            const foodWords = ['pizza', 'pie', 'pepperoni', 'chicken', 'burger', 'wrap', 'sandwich', 'pasta', 'soup', 'salad', 'calzone'];
             for (let i = 0; i < lines.length - 1; i++) {
-              const lineL = lines[i].toLowerCase();
-              if (!foodWords.some(w => lineL.includes(w))) continue;
+              if (!foodWords.some(w => lines[i].toLowerCase().includes(w))) continue;
               if (lines[i].length > 100) continue;
               for (let j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
                 const m = lines[j].match(/^\$(\d+\.\d{2})$/) || lines[j].match(/^\$(\d+)$/);
@@ -198,7 +166,7 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
 
         await storePage.close();
         const deliveryFee = data.deliveryFee ?? store.deliveryFee;
-        console.log(`[GrubHub] ${store.name}: ${data.items.length} items, fee: $${deliveryFee}, rating: ${store.rating}, eta: ${store.eta}`);
+        console.log(`[GrubHub] ${store.name}: ${data.items.length} items, fee: $${deliveryFee}, rating: ${store.rating}`);
 
         if (data.items.length > 0) {
           data.items.forEach(item => {

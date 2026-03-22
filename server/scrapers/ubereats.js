@@ -1,26 +1,12 @@
 const { chromium } = require('playwright');
 
-function getProxyConfig() {
-  const host = process.env.PROXY_HOST;
-  const port = process.env.PROXY_PORT;
-  const user = process.env.PROXY_USER;
-  const pass = process.env.PROXY_PASS;
-  if (!host || !port) return null;
-  return { server: `http://${host}:${port}`, username: user, password: pass };
-}
-
-
 async function scrapeUberEats({ address, dish, credentials, headless = true, timeout = 45000 }) {
-  const proxy = getProxyConfig();
-  if (proxy) console.log(`[UberEats] Using proxy: ${proxy.server}`);
   const browser = await chromium.launch({
     headless,
-    ...(proxy && { proxy }),
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled']
   });
 
   const context = await browser.newContext({
-    ...(proxy && { proxy }),
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
     viewport: { width: 1280, height: 800 },
     locale: 'en-US',
@@ -35,7 +21,6 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
   const results = [];
 
   try {
-    // Step 1: Set address
     console.log(`[UberEats] Setting address...`);
     await page.goto('https://www.ubereats.com', { waitUntil: 'domcontentloaded', timeout });
     await page.waitForTimeout(2000);
@@ -56,13 +41,11 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
       if (confirmBtn) { await confirmBtn.click({ force: true }); await page.waitForTimeout(800); }
     }
 
-    // Step 2: Search
     await page.goto(`https://www.ubereats.com/search?q=${encodeURIComponent(dish)}`, { waitUntil: 'domcontentloaded', timeout });
     await page.waitForTimeout(3500);
 
     await page.waitForSelector('[data-testid="store-card"], a[href*="/store/"]', { timeout: 12000 }).catch(() => {});
 
-    // Step 3: Get top 6 store cards
     const rawCards = await page.evaluate(() => {
       const seen = new Set();
       const out = [];
@@ -72,12 +55,14 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
         const href = link?.getAttribute('href');
         if (!href || seen.has(href)) continue;
         seen.add(href);
-        const lines = (card.innerText || '').split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        const fullText = card.innerText || '';
+        const lines = fullText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         const name = lines[0];
         if (!name || name.length < 2) continue;
         const ratingLine = lines.find(l => /^[45]\.\d$/.test(l));
-        const etaLine = lines.find(l => /\d+\s*(?:–|-|−)\s*\d+\s*min|\d+\s*min/i.test(l));
-        out.push({ href, name, ratingLine, etaLine });
+        // Find ETA anywhere in card text
+        const etaMatch = fullText.match(/(\d+[\s\u2013\-]+\d+\s*min|\d+\s*min)/i);
+        out.push({ href, name, ratingLine, eta: etaMatch ? etaMatch[1].trim() : null });
         if (out.length >= 6) break;
       }
       return out;
@@ -89,10 +74,9 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
       name: card.name,
       href: card.href,
       rating: card.ratingLine ? parseFloat(card.ratingLine) : null,
-      eta: card.etaLine?.trim() || null
+      eta: card.eta || null
     }));
 
-    // Step 4: Sequential store visits, 12s timeout
     for (const store of storeData) {
       if (!store.href) {
         results.push({ platform: 'Uber Eats', restaurant: store.name, item: dish, itemPrice: null, deliveryFee: null, totalPrice: null, rating: store.rating, eta: store.eta, url: page.url() });
@@ -109,14 +93,12 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
           const allText = document.body.innerText;
           const lines = allText.split('\n').map(l => l.trim()).filter(l => l);
 
-          // Get delivery fee
           let deliveryFee = null;
           for (const line of lines) {
             if (/free delivery/i.test(line)) { deliveryFee = 0; break; }
             if (/delivery fee/i.test(line)) { const m = line.match(/\$(\d+\.?\d*)/); if (m) { deliveryFee = parseFloat(m[1]); break; } }
           }
 
-          // Get items
           const items = [];
           for (let i = 0; i < lines.length - 1; i++) {
             if (!dishWords.some(w => lines[i].toLowerCase().includes(w))) continue;
@@ -126,21 +108,32 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
               if (m) { const p = parseFloat(m[1]); if (p > 1 && p < 150) { items.push({ name: lines[i].substring(0, 70), price: p }); break; } }
             }
           }
+          if (items.length === 0) {
+            const foodWords = ['pizza', 'pie', 'pepperoni', 'chicken', 'burger', 'wrap', 'sandwich', 'pasta', 'soup', 'salad'];
+            for (let i = 0; i < lines.length - 1; i++) {
+              if (!foodWords.some(w => lines[i].toLowerCase().includes(w))) continue;
+              if (lines[i].length > 100) continue;
+              for (let j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
+                const m = lines[j].match(/^\$(\d+\.\d{2})$/) || lines[j].match(/^\$(\d+)$/);
+                if (m) { const p = parseFloat(m[1]); if (p > 1 && p < 150) { items.push({ name: lines[i].substring(0, 70), price: p }); break; } }
+              }
+              if (items.length >= 4) break;
+            }
+          }
           const seen = new Set();
           return { deliveryFee, items: items.filter(r => { const k=`${r.name}|${r.price}`; if(seen.has(k))return false; seen.add(k); return true; }).slice(0, 4) };
         }, dish);
 
         await storePage.close();
-        const deliveryFee = data.deliveryFee;
-        console.log(`[UberEats] ${store.name}: ${data.items.length} items, fee: $${deliveryFee}, eta: ${store.eta}`);
+        console.log(`[UberEats] ${store.name}: ${data.items.length} items, fee: $${data.deliveryFee}, eta: ${store.eta}`);
 
         if (data.items.length > 0) {
           data.items.forEach(item => {
-            const total = deliveryFee != null ? parseFloat((item.price + deliveryFee).toFixed(2)) : null;
-            results.push({ platform: 'Uber Eats', restaurant: store.name, item: item.name, itemPrice: item.price, deliveryFee, totalPrice: total, rating: store.rating, eta: store.eta, url: `https://www.ubereats.com${store.href}` });
+            const total = data.deliveryFee != null ? parseFloat((item.price + data.deliveryFee).toFixed(2)) : null;
+            results.push({ platform: 'Uber Eats', restaurant: store.name, item: item.name, itemPrice: item.price, deliveryFee: data.deliveryFee, totalPrice: total, rating: store.rating, eta: store.eta, url: `https://www.ubereats.com${store.href}` });
           });
         } else {
-          results.push({ platform: 'Uber Eats', restaurant: store.name, item: dish, itemPrice: null, deliveryFee, totalPrice: null, rating: store.rating, eta: store.eta, url: `https://www.ubereats.com${store.href}` });
+          results.push({ platform: 'Uber Eats', restaurant: store.name, item: dish, itemPrice: null, deliveryFee: data.deliveryFee, totalPrice: null, rating: store.rating, eta: store.eta, url: `https://www.ubereats.com${store.href}` });
         }
       } catch(e) {
         console.log(`[UberEats] Store failed ${store.name}: ${e.message.split('\n')[0]}`);
