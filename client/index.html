@@ -26,7 +26,7 @@
   --shadow-lg: 0 12px 40px rgba(0,0,0,0.1), 0 4px 12px rgba(0,0,0,0.05);
   --radius: 16px;
   --radius-sm: 10px;
-  --gh: #f63440; --ue: #06c167;
+  --gh: #f63440; --ue: #06c167; --dd: #ff3008;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: var(--off-white); color: var(--text); font-family: 'Plus Jakarta Sans', sans-serif; min-height: 100vh; -webkit-font-smoothing: antialiased; }
@@ -45,6 +45,7 @@ h1 em { font-style: normal; color: var(--accent); }
 .platform-pill { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 20px; border: 1.5px solid; }
 .platform-pill.gh { color: var(--gh); background: #fff4f4; border-color: #ffd5d5; }
 .platform-pill.ue { color: var(--ue); background: #f0fdf6; border-color: #b8f0d0; }
+.platform-pill.dd { color: var(--dd); background: #fff2f2; border-color: #ffc4c0; }
 .platform-pill .pip { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .platform-pill.coming-soon { color: var(--text-muted); background: var(--off-white); border-color: var(--border); opacity: .7; }
 
@@ -74,6 +75,8 @@ h1 em { font-style: normal; color: var(--accent); }
 .ptoggle.ue .pip { background: var(--ue); }
 .ptoggle.gh.active { color: var(--gh); background: #fff4f4; border-color: var(--gh); }
 .ptoggle.ue.active { color: var(--ue); background: #f0fdf6; border-color: var(--ue); }
+.ptoggle.dd .pip { background: var(--dd); }
+.ptoggle.dd.active { color: var(--dd); background: #fff2f2; border-color: var(--dd); }
 
 /* MAIN */
 .main { max-width: 960px; margin: 0 auto; padding: 28px 24px 80px; }
@@ -143,6 +146,7 @@ h1 em { font-style: normal; color: var(--accent); }
 .platform-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 5px; white-space: nowrap; letter-spacing: .03em; flex-shrink: 0; }
 .platform-badge.grubhub { background: #fff4f4; color: var(--gh); border: 1px solid #ffd5d5; }
 .platform-badge.ubereats { background: #f0fdf6; color: var(--ue); border: 1px solid #b8f0d0; }
+.platform-badge.doordash { background: #fff2f2; color: var(--dd); border: 1px solid #ffc4c0; }
 
 .restaurant-info { min-width: 0; }
 .restaurant-name-row { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; flex-wrap: wrap; }
@@ -192,6 +196,8 @@ h1 em { font-style: normal; color: var(--accent); }
 .order-btn.gh:hover { background: #d42b36; }
 .order-btn.ue { background: var(--ue); }
 .order-btn.ue:hover { background: #059952; }
+.order-btn.doordash { background: var(--dd); }
+.order-btn.doordash:hover { background: #cc2600; }
 
 /* View button */
 .view-btn { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--accent); text-decoration: none; padding: 4px 8px; border: 1.5px solid var(--accent-light); border-radius: 6px; margin-top: 10px; transition: all .15s; }
@@ -227,7 +233,7 @@ footer p { font-size: 11px; color: var(--text-muted); }
     <div class="platform-pills">
       <div class="platform-pill gh"><div class="pip"></div>GrubHub</div>
       <div class="platform-pill ue"><div class="pip"></div>Uber Eats</div>
-      <div class="platform-pill coming-soon">DoorDash — coming soon</div>
+      <div class="platform-pill dd"><div class="pip"></div>DoorDash</div>
     </div>
   </div>
 </section>
@@ -268,6 +274,7 @@ footer p { font-size: 11px; color: var(--text-muted); }
       <span class="platform-row-label">Platforms:</span>
       <label class="ptoggle gh active" onclick="togglePlatform(this)"><input type="checkbox" value="grubhub" checked><div class="pip"></div>GrubHub</label>
       <label class="ptoggle ue active" onclick="togglePlatform(this)"><input type="checkbox" value="ubereats" checked><div class="pip"></div>Uber Eats</label>
+      <label class="ptoggle dd active" onclick="togglePlatform(this)"><input type="checkbox" value="doordash" checked><div class="pip"></div>DoorDash</label>
     </div>
   </div>
 </section>
@@ -321,7 +328,7 @@ footer p { font-size: 11px; color: var(--text-muted); }
   </div>
 </main>
 
-<footer><p>EatMe compares live prices across GrubHub and Uber Eats. Prices and availability may vary. DoorDash support coming soon.</p></footer>
+<footer><p>EatMe compares live prices across GrubHub, Uber Eats, and DoorDash. Prices and availability may vary.</p></footer>
 
 <script>
 let allResults = [];
@@ -454,7 +461,7 @@ function renderRestaurants(groups, sortBy) {
   }
 
   list.innerHTML = sorted.map((g, i) => {
-    const slug = g.platform === 'Uber Eats' ? 'ubereats' : 'grubhub';
+    const slug = g.platform === 'Uber Eats' ? 'ubereats' : g.platform === 'DoorDash' ? 'doordash' : 'grubhub';
     const isWinner = i === 0 && g.bestTotal != null;
     const hasItems = g.items.length > 0;
     const bestItem = g.bestItem;
