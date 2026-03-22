@@ -536,30 +536,45 @@ function showError(msg) {
 }
 
 async function detectLocation() {
-  const btn = document.getElementById('locBtn');
-  if (!navigator.geolocation) { showError('Geolocation not supported by your browser.'); return; }
-  btn.textContent = '⏳';
-  btn.disabled = true;
-  navigator.geolocation.getCurrentPosition(
-    async (pos) => {
-      userLat = pos.coords.latitude;
-      userLng = pos.coords.longitude;
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${userLat}&lon=${userLng}&format=json`);
-        const data = await res.json();
-        const a = data.address || {};
-        const formatted = [a.house_number, a.road, a.city||a.town||a.village, a.state, a.postcode].filter(Boolean).join(', ');
-        document.getElementById('address').value = formatted || `${userLat.toFixed(5)}, ${userLng.toFixed(5)}`;
-      } catch(e) {
-        document.getElementById('address').value = `${userLat.toFixed(5)}, ${userLng.toFixed(5)}`;
-      }
-      btn.textContent = '✅';
-      setTimeout(() => { btn.textContent = '📍'; btn.disabled = false; }, 2000);
-    },
-    () => { btn.textContent = '📍'; btn.disabled = false; showError('Could not get your location.'); },
-    { timeout: 10000, enableHighAccuracy: true }
-  );
+  return new Promise((resolve) => {
+    const btn = document.getElementById('locBtn');
+    if (!navigator.geolocation) { resolve(); return; }
+    btn.textContent = '⏳';
+    btn.disabled = true;
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        userLat = pos.coords.latitude;
+        userLng = pos.coords.longitude;
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${userLat}&lon=${userLng}&format=json`);
+          const data = await res.json();
+          const a = data.address || {};
+          const formatted = [a.house_number, a.road, a.city||a.town||a.village, a.state, a.postcode].filter(Boolean).join(', ');
+          document.getElementById('address').value = formatted || `${userLat.toFixed(5)}, ${userLng.toFixed(5)}`;
+        } catch(e) {
+          document.getElementById('address').value = `${userLat.toFixed(5)}, ${userLng.toFixed(5)}`;
+        }
+        btn.textContent = '✅';
+        setTimeout(() => { btn.textContent = '📍'; btn.disabled = false; }, 2000);
+        resolve();
+      },
+      () => { btn.textContent = '📍'; btn.disabled = false; resolve(); },
+      { timeout: 10000, enableHighAccuracy: true }
+    );
+  });
 }
+
+// Auto-detect location on page load
+document.addEventListener('DOMContentLoaded', () => {
+  if (navigator.geolocation) {
+    const addrInput = document.getElementById('address');
+    addrInput.value = '';
+    addrInput.placeholder = 'Detecting your location...';
+    detectLocation().finally(() => {
+      addrInput.placeholder = 'Delivery address';
+    });
+  }
+});
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !document.getElementById('searchBtn').disabled) runSearch();
