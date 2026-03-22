@@ -6,17 +6,13 @@ function getProxyConfig() {
   const user = process.env.PROXY_USER;
   const pass = process.env.PROXY_PASS;
   if (!host || !port) return null;
-  return {
-    server: `http://${host}:${port}`,
-    username: user,
-    password: pass
-  };
+  return { server: `http://${host}:${port}`, username: user, password: pass };
 }
 
 async function scrapeDoorDash({ address, dish, credentials, headless = true, timeout = 45000 }) {
   const proxy = getProxyConfig();
   if (!proxy) {
-    console.log(`[DoorDash] No proxy configured — skipping (blocked by Cloudflare on cloud IPs)`);
+    console.log(`[DoorDash] No proxy configured — skipping`);
     return [];
   }
 
@@ -29,10 +25,10 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
   });
 
   const context = await browser.newContext({
+    proxy,
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
     viewport: { width: 1280, height: 800 },
-    extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' },
-    proxy
+    extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' }
   });
 
   await context.addInitScript(() => {
@@ -43,12 +39,29 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
   const results = [];
 
   try {
-    console.log(`[DoorDash] Loading homepage via residential proxy...`);
+    console.log(`[DoorDash] Loading homepage...`);
     await page.goto('https://www.doordash.com', { waitUntil: 'domcontentloaded', timeout });
-    await page.waitForTimeout(3000);
 
-    const title = await page.title();
-    console.log(`[DoorDash] Page title: ${title}`);
+    // Wait for Cloudflare JS challenge to resolve ("Just a moment...")
+    // It auto-solves in ~3-5 seconds
+    let attempts = 0;
+    while (attempts < 10) {
+      const title = await page.title();
+      console.log(`[DoorDash] Title (attempt ${attempts+1}): ${title}`);
+      if (!title.includes('moment') && !title.includes('Cloudflare') && title.length > 5) break;
+      await page.waitForTimeout(3000);
+      attempts++;
+    }
+
+    const finalTitle = await page.title();
+    console.log(`[DoorDash] Final title: ${finalTitle}`);
+
+    if (finalTitle.includes('moment') || finalTitle.includes('Cloudflare')) {
+      console.log('[DoorDash] Still on Cloudflare challenge — proxy IP may not be residential enough');
+      return [];
+    }
+
+    await page.waitForTimeout(2000);
 
     // Remove login modal from DOM
     await page.evaluate(() => {
@@ -57,15 +70,14 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
     });
     await page.waitForTimeout(500);
 
-    // Wait for visible address input
+    // Wait for visible input
     await page.waitForFunction(() => {
-      const inputs = Array.from(document.querySelectorAll('input'));
-      return inputs.some(i => i.offsetWidth > 0 && i.offsetHeight > 0);
+      return Array.from(document.querySelectorAll('input')).some(i => i.offsetWidth > 0 && i.offsetHeight > 0);
     }, { timeout: 10000 }).catch(() => {});
 
-    const inputHandle = await page.evaluateHandle(() => {
-      return Array.from(document.querySelectorAll('input')).find(i => i.offsetWidth > 0 && i.offsetHeight > 0) || null;
-    });
+    const inputHandle = await page.evaluateHandle(() =>
+      Array.from(document.querySelectorAll('input')).find(i => i.offsetWidth > 0 && i.offsetHeight > 0) || null
+    );
 
     const inputEl = inputHandle.asElement();
     if (inputEl) {
@@ -88,13 +100,23 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
       await page.waitForTimeout(3000);
       console.log(`[DoorDash] URL after address: ${page.url()}`);
     } else {
-      console.log('[DoorDash] No visible input found');
+      console.log('[DoorDash] No visible input — skipping address step');
     }
 
     // Search
     await page.goto(`https://www.doordash.com/search/store/${encodeURIComponent(dish)}/`, { waitUntil: 'domcontentloaded', timeout });
     await page.waitForTimeout(4000);
     console.log(`[DoorDash] Search URL: ${page.url()}`);
+
+    // Wait for Cloudflare again on search page
+    let searchAttempts = 0;
+    while (searchAttempts < 5) {
+      const title = await page.title();
+      if (!title.includes('moment') && !title.includes('Cloudflare')) break;
+      console.log(`[DoorDash] Waiting for CF challenge on search page...`);
+      await page.waitForTimeout(3000);
+      searchAttempts++;
+    }
 
     await page.waitForSelector('a[href*="/store/"]', { timeout: 10000 }).catch(() => {});
 
@@ -116,6 +138,7 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
     });
 
     console.log(`[DoorDash] Found ${rawCards.length} stores`);
+    if (rawCards[0]) console.log(`[DoorDash] Sample: ${JSON.stringify(rawCards[0].lines.slice(0,6))}`);
 
     const storeData = rawCards.map(card => {
       const text = card.text;
@@ -149,12 +172,27 @@ async function scrapeDoorDash({ address, dish, credentials, headless = true, tim
             if (/delivery fee/i.test(line)) { const m = line.match(/\$(\d+\.?\d*)/); if (m) { deliveryFee = parseFloat(m[1]); break; } }
           }
           const items = [];
+          // Strategy 1: exact match
           for (let i = 0; i < lines.length - 1; i++) {
             if (!dishWords.some(w => lines[i].toLowerCase().includes(w))) continue;
             if (lines[i].length > 100) continue;
             for (let j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
               const m = lines[j].match(/^\$(\d+\.\d{2})$/) || lines[j].match(/^\$(\d+)$/);
               if (m) { const p = parseFloat(m[1]); if (p > 1 && p < 150) { items.push({ name: lines[i].substring(0, 70), price: p }); break; } }
+            }
+          }
+          // Strategy 2: related food words fallback
+          if (items.length === 0) {
+            const foodWords = ['pizza', 'pie', 'pepperoni', 'chicken', 'burger', 'wrap', 'sandwich', 'pasta', 'soup', 'salad'];
+            for (let i = 0; i < lines.length - 1; i++) {
+              const lineL = lines[i].toLowerCase();
+              if (!foodWords.some(w => lineL.includes(w))) continue;
+              if (lines[i].length > 100) continue;
+              for (let j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
+                const m = lines[j].match(/^\$(\d+\.\d{2})$/) || lines[j].match(/^\$(\d+)$/);
+                if (m) { const p = parseFloat(m[1]); if (p > 1 && p < 150) { items.push({ name: lines[i].substring(0, 70), price: p }); break; } }
+              }
+              if (items.length >= 4) break;
             }
           }
           const seen = new Set();
