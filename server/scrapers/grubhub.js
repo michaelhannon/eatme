@@ -1,4 +1,5 @@
 const { chromium } = require('playwright');
+const { getDishWords } = require('../dishWords');
 
 async function scrapeGrubHub({ address, dish, credentials, headless = true, timeout = 45000, platform = 'GrubHub' }) {
   if (platform === 'Seamless') {
@@ -149,9 +150,9 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
             }
           }
           if (items.length === 0) {
-            const foodWords = ['pizza', 'pie', 'pepperoni', 'chicken', 'burger', 'wrap', 'sandwich', 'pasta', 'soup', 'salad', 'calzone'];
+            const allDishWords = getDishWords(searchDish);
             for (let i = 0; i < lines.length - 1; i++) {
-              if (!foodWords.some(w => lines[i].toLowerCase().includes(w))) continue;
+              if (!allDishWords.some(w => lines[i].toLowerCase().includes(w))) continue;
               if (lines[i].length > 100) continue;
               for (let j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
                 const m = lines[j].match(/^\$(\d+\.\d{2})$/) || lines[j].match(/^\$(\d+)$/);
