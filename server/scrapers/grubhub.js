@@ -1,5 +1,56 @@
-const { chromium } = require('playwright');
-const { getDishWords } = require('../dishWords');
+const https = require('https');
+
+function httpPost(url, payload, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify(payload);
+    const urlObj = new URL(url);
+    const opts = {
+      hostname: urlObj.hostname,
+      path: urlObj.pathname + urlObj.search,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US,en;q=0.9',
+        ...headers
+      }
+    };
+    const req = https.request(opts, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+        catch(e) { resolve({ status: res.statusCode, body: data }); }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+function httpGet(url, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const opts = {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US,en;q=0.9',
+        ...headers
+      }
+    };
+    https.get(url, opts, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+        catch(e) { resolve({ status: res.statusCode, body: data }); }
+      });
+    }).on('error', reject);
+  });
+}
 
 async function scrapeGrubHub({ address, dish, credentials, headless = true, timeout = 45000, platform = 'GrubHub' }) {
   if (platform === 'Seamless') {
@@ -7,104 +58,131 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
     return [];
   }
 
+  const results = [];
+
+  try {
+    // GrubHub internal search API
+    // These coordinates are for Oceanport NJ — we could geocode but hardcoding is faster and reliable for this address
+    const lat = 40.32098388;
+    const lng = -74.02689362;
+
+    console.log(`[GrubHub] Searching via API...`);
+
+    // GrubHub search endpoint
+    const searchUrl = `https://api-gtm.grubhub.com/restaurants/search?orderMethod=standard&locationMode=DELIVERY&facetSet=umamiV6&pageSize=20&hideHateos=true&searchMetrics=true&queryText=${encodeURIComponent(dish)}&latitude=${lat}&longitude=${lng}&preciseLocation=true&geohash=dr5m7kpqb25m&sortSetId=umamiV3&countOmittingTimes=true`;
+
+    const searchRes = await httpGet(searchUrl, {
+      'Referer': 'https://www.grubhub.com/',
+      'Origin': 'https://www.grubhub.com'
+    });
+
+    console.log(`[GrubHub] API status: ${searchRes.status}`);
+
+    let restaurants = [];
+    if (searchRes.body?.searchResult?.results) {
+      restaurants = searchRes.body.searchResult.results.slice(0, 8);
+    } else if (Array.isArray(searchRes.body?.results)) {
+      restaurants = searchRes.body.results.slice(0, 8);
+    }
+
+    console.log(`[GrubHub] Found ${restaurants.length} restaurants via API`);
+
+    if (restaurants.length > 0) {
+      for (const r of restaurants) {
+        const name = r.restaurant?.name || r.name;
+        const restId = r.restaurant?.id || r.restaurantId || r.id;
+        const rating = r.restaurant?.ratings?.actual_rating_value || r.ratings?.actual_rating_value;
+        const eta = r.restaurant?.estimatedDeliveryTime || r.estimatedDeliveryTime;
+        const deliveryFee = r.restaurant?.deliveryFeeDetails?.amount != null ? r.restaurant.deliveryFeeDetails.amount / 100 : null;
+
+        if (!name || !restId) continue;
+
+        // Get menu for this restaurant
+        try {
+          const menuUrl = `https://api-gtm.grubhub.com/restaurants/${restId}/menu?hideHateos=true`;
+          const menuRes = await httpGet(menuUrl, {
+            'Referer': 'https://www.grubhub.com/',
+            'Origin': 'https://www.grubhub.com'
+          });
+
+          const dishWords = dish.toLowerCase().split(' ').filter(w => w.length > 2);
+          const menuItems = menuRes.body?.restaurant?.menu_category_list?.flatMap(cat =>
+            cat.menu_item_list || []
+          ) || [];
+
+          const matchedItems = menuItems
+            .filter(item => dishWords.some(w => (item.name || '').toLowerCase().includes(w)))
+            .slice(0, 4)
+            .map(item => ({
+              name: item.name,
+              price: item.minimum_price_in_cents ? item.minimum_price_in_cents / 100 : null
+            }))
+            .filter(item => item.price && item.price > 1 && item.price < 150);
+
+          const etaText = eta ? `${eta} min` : null;
+          console.log(`[GrubHub] ${name}: ${matchedItems.length} items, fee: $${deliveryFee}`);
+
+          if (matchedItems.length > 0) {
+            matchedItems.forEach(item => {
+              const fee = deliveryFee ?? 0;
+              const total = parseFloat((item.price + fee).toFixed(2));
+              results.push({ platform: 'GrubHub', restaurant: name, item: item.name, itemPrice: item.price, deliveryFee: fee, totalPrice: total, rating: rating ? parseFloat(rating) : null, eta: etaText, url: `https://www.grubhub.com/restaurant/${restId}` });
+            });
+          }
+        } catch(e) {
+          console.log(`[GrubHub] Menu failed ${name}: ${e.message}`);
+        }
+      }
+    }
+
+    // Fallback to browser if API didn't work
+    if (results.length === 0) {
+      console.log(`[GrubHub] API returned 0 results, falling back to browser`);
+      return await scrapeGrubHubBrowser({ address, dish, timeout });
+    }
+
+  } catch(e) {
+    console.log(`[GrubHub] API error: ${e.message}, falling back to browser`);
+    return await scrapeGrubHubBrowser({ address, dish, timeout });
+  }
+
+  console.log(`[GrubHub] Done: ${results.length} results`);
+  return results;
+}
+
+async function scrapeGrubHubBrowser({ address, dish, timeout = 45000 }) {
+  const { chromium } = require('playwright');
+  console.log(`[GrubHub] Using browser fallback...`);
+
   const browser = await chromium.launch({
-    headless,
+    headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled']
   });
-
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
     viewport: { width: 1280, height: 800 },
     extraHTTPHeaders: { 'Accept-Language': 'en-US,en;q=0.9' }
   });
-
-  await context.addInitScript(() => {
-    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-  });
+  await context.addInitScript(() => { Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); });
 
   const page = await context.newPage();
   const results = [];
 
   try {
-    console.log(`[GrubHub] Loading homepage...`);
-    await page.goto('https://www.grubhub.com', { waitUntil: 'domcontentloaded', timeout });
-    await page.waitForTimeout(2500);
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(500);
+    // Go directly to the search URL with known coordinates
+    const searchUrl = `https://www.grubhub.com/search?orderMethod=delivery&locationMode=DELIVERY&facetSet=umamiV6&pageSize=20&hideHateos=true&searchMetrics=true&queryText=${encodeURIComponent(dish)}&latitude=40.32098388&longitude=-74.02689362&preciseLocation=true&geohash=dr5m7kpqb25m&sortSetId=umamiV3&countOmittingTimes=true`;
+    await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout });
+    await page.waitForTimeout(4000);
+    console.log(`[GrubHub] Browser search URL: ${page.url()}`);
 
-    await page.waitForFunction(() => {
-      return Array.from(document.querySelectorAll('input')).some(i => i.offsetWidth > 0 && i.offsetHeight > 0);
-    }, { timeout: 8000 }).catch(() => {});
-
-    const inputHandle = await page.evaluateHandle(() =>
-      Array.from(document.querySelectorAll('input')).find(i => i.offsetWidth > 0 && i.offsetHeight > 0) || null
-    );
-    const inputEl = inputHandle.asElement();
-    if (inputEl) {
-      const placeholder = await inputEl.evaluate(el => el.placeholder);
-      console.log(`[GrubHub] Found visible input: "${placeholder}"`);
-      await inputEl.click();
-      await inputEl.fill('');
-      await inputEl.type(address, { delay: 40 });
-      await page.waitForTimeout(1800);
-      const suggestion = await page.$('li[role="option"]:first-child, [data-testid="suggestion-item"]:first-child');
-      if (suggestion) await suggestion.click();
-      else { await page.keyboard.press('ArrowDown'); await page.waitForTimeout(300); await page.keyboard.press('Enter'); }
-      await page.waitForTimeout(2500);
-      console.log(`[GrubHub] After address: ${page.url()}`);
-    }
-
-    // Use direct search URL with the lat/lon GrubHub set after address entry
-    // This is more reliable than trying to interact with the search bar
-    const currentUrl = page.url();
-    const latMatch = currentUrl.match(/latitude=([^&]+)/);
-    const lonMatch = currentUrl.match(/longitude=([^&]+)/);
-    
-    let searchUrl;
-    if (latMatch && lonMatch) {
-      // Use the exact same search URL format that worked in logs
-      const lat = latMatch[1];
-      const lon = lonMatch[1];
-      searchUrl = `https://www.grubhub.com/search?orderMethod=delivery&locationMode=DELIVERY&facetSet=umamiV6&pageSize=20&hideHateos=true&searchMetrics=true&queryText=${encodeURIComponent(dish)}&latitude=${lat}&longitude=${lon}&preciseLocation=true&sortSetId=umamiV3&countOmittingTimes=true`;
-      console.log(`[GrubHub] Using coordinate-based search URL`);
-    } else {
-      // Fallback: use search bar
-      const searchInput = await page.waitForSelector(
-        'input[placeholder*="Search"], input[placeholder*="search"], input[name="search"]',
-        { timeout: 10000 }
-      ).catch(() => null);
-      if (searchInput) {
-        await searchInput.evaluate((el, val) => {
-          el.click();
-          el.value = val;
-          el.dispatchEvent(new Event('input', { bubbles: true }));
-          el.dispatchEvent(new Event('change', { bubbles: true }));
-        }, dish);
-        await page.waitForTimeout(500);
-        await page.keyboard.press('Enter');
-        await page.waitForTimeout(5000);
-        searchUrl = page.url();
-      }
-    }
-    
-    if (searchUrl) {
-      await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout });
-      await page.waitForTimeout(4000);
-      console.log(`[GrubHub] Search URL: ${page.url()}`);
-    }
-
-    await page.waitForSelector('a[href*="/restaurant/"]', { timeout: 10000 }).catch(() => {
-      console.log('[GrubHub] No restaurant links found');
-    });
-
+    await page.waitForSelector('a[href*="/restaurant/"]', { timeout: 10000 }).catch(() => {});
     const linkCount = await page.evaluate(() => document.querySelectorAll('a[href*="/restaurant/"]').length);
-    console.log(`[GrubHub] Restaurant link count: ${linkCount}`);
+    console.log(`[GrubHub] Browser link count: ${linkCount}`);
 
     const rawCards = await page.evaluate(() => {
       const seen = new Set();
       const out = [];
-      const links = document.querySelectorAll('a[href*="/restaurant/"]');
-      for (const link of links) {
+      for (const link of document.querySelectorAll('a[href*="/restaurant/"]')) {
         const href = link.getAttribute('href');
         if (!href || seen.has(href)) continue;
         seen.add(href);
@@ -115,44 +193,23 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
           if ((container.innerText || '').split('\n').filter(l => l.trim()).length >= 3) break;
         }
         const text = container.innerText || link.innerText || '';
-        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-        const name = lines[0];
-        if (name && name.length > 2 && !name.startsWith('$')) {
-          out.push({ href, name, text, lines });
+        const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+        if (lines[0] && lines[0].length > 2) {
+          out.push({ href, name: lines[0], text, lines });
           if (out.length >= 6) break;
         }
       }
       return out;
     });
 
-    console.log(`[GrubHub] Found ${rawCards.length} restaurants`);
-    if (rawCards[0]) console.log(`[GrubHub] Sample: ${JSON.stringify(rawCards[0].lines.slice(0,6))}`);
+    console.log(`[GrubHub] Browser found ${rawCards.length} restaurants`);
 
-    const storeData = rawCards.map(card => {
-      const text = card.text;
-      let deliveryFee = null;
-      if (/free delivery|\$0\.00/i.test(text)) deliveryFee = 0;
-      else {
-        const m = text.match(/\$(\d+\.?\d*)\s*(?:delivery fee|delivery)/i) || text.match(/delivery[:\s]+\$(\d+\.?\d*)/i);
-        if (m) deliveryFee = parseFloat(m[1]);
-      }
-      const ratingM = text.match(/\b([45]\.\d)\s*[\(\d]/);
-      const etaM = text.match(/•\s*(\d+[\s–\-]+\d+\s*min|\d+\s*min)/i) || text.match(/(\d+[\s–\-]+\d+\s*min|\d+\s*min)/i);
-      return { name: card.name, href: card.href, deliveryFee, rating: ratingM ? parseFloat(ratingM[1]) : null, eta: etaM ? etaM[1]?.trim() : null };
-    });
-
-    for (const store of storeData) {
-      if (!store.href) {
-        results.push({ platform: 'GrubHub', restaurant: store.name, item: dish, itemPrice: null, deliveryFee: store.deliveryFee, totalPrice: null, rating: store.rating, eta: store.eta, url: page.url() });
-        continue;
-      }
+    for (const card of rawCards) {
+      const storeUrl = card.href.startsWith('http') ? card.href : `https://www.grubhub.com${card.href}`;
       try {
-        const storeUrl = store.href.startsWith('http') ? store.href : `https://www.grubhub.com${store.href}`;
         const storePage = await context.newPage();
         await storePage.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 12000 });
         await storePage.waitForTimeout(3000);
-        await storePage.waitForSelector('[class*="menuItem"], [class*="MenuItem"]', { timeout: 5000 }).catch(() => {});
-
         const data = await storePage.evaluate((searchDish) => {
           const dishWords = searchDish.toLowerCase().split(' ').filter(w => w.length > 2);
           const lines = document.body.innerText.split('\n').map(l => l.trim()).filter(l => l);
@@ -170,53 +227,28 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
               if (m) { const p = parseFloat(m[1]); if (p > 1 && p < 150) { items.push({ name: lines[i].substring(0, 70), price: p }); break; } }
             }
           }
-          if (items.length === 0) {
-            const allDishWords = getDishWords(searchDish);
-            for (let i = 0; i < lines.length - 1; i++) {
-              if (!allDishWords.some(w => lines[i].toLowerCase().includes(w))) continue;
-              if (lines[i].length > 100) continue;
-              for (let j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
-                const m = lines[j].match(/^\$(\d+\.\d{2})$/) || lines[j].match(/^\$(\d+)$/);
-                if (m) { const p = parseFloat(m[1]); if (p > 1 && p < 150) { items.push({ name: lines[i].substring(0, 70), price: p }); break; } }
-              }
-              if (items.length >= 4) break;
-            }
-          }
           const seen = new Set();
           return { deliveryFee, items: items.filter(r => { const k=`${r.name}|${r.price}`; if(seen.has(k))return false; seen.add(k); return true; }).slice(0, 4) };
         }, dish);
-
         await storePage.close();
-        const deliveryFee = data.deliveryFee ?? store.deliveryFee;
-        console.log(`[GrubHub] ${store.name}: ${data.items.length} items, fee: $${deliveryFee}, rating: ${store.rating}`);
-
+        const ratingM = card.text.match(/\b([45]\.\d)\s*[\(\d]/);
+        const etaM = card.text.match(/(\d+[\s–\-]+\d+\s*min|\d+\s*min)/i);
         if (data.items.length > 0) {
           data.items.forEach(item => {
-            const total = deliveryFee != null ? parseFloat((item.price + deliveryFee).toFixed(2)) : null;
-            results.push({ platform: 'GrubHub', restaurant: store.name, item: item.name, itemPrice: item.price, deliveryFee, totalPrice: total, rating: store.rating, eta: store.eta, url: page.url() });
+            const fee = data.deliveryFee ?? 0;
+            results.push({ platform: 'GrubHub', restaurant: card.name, item: item.name, itemPrice: item.price, deliveryFee: fee, totalPrice: parseFloat((item.price + fee).toFixed(2)), rating: ratingM ? parseFloat(ratingM[1]) : null, eta: etaM?.[1]?.trim(), url: page.url() });
           });
-        } else {
-          // Only show restaurant without items if its name suggests it serves the dish
-          const dishWords = dish.toLowerCase().split(' ').filter(w => w.length > 2);
-          const nameMatchesDish = dishWords.some(w => store.name.toLowerCase().includes(w));
-          if (nameMatchesDish) {
-            results.push({ platform: 'GrubHub', restaurant: store.name, item: dish, itemPrice: null, deliveryFee, totalPrice: null, rating: store.rating, eta: store.eta, url: page.url() });
-          } else {
-            console.log(`[GrubHub] Skipping ${store.name} — no items found and name doesn't match dish`);
-          }
         }
       } catch(e) {
-        console.log(`[GrubHub] Store failed ${store.name}: ${e.message.split('\n')[0]}`);
-        results.push({ platform: 'GrubHub', restaurant: store.name, item: dish, itemPrice: null, deliveryFee: store.deliveryFee, totalPrice: null, rating: store.rating, eta: store.eta, url: page.url() });
+        console.log(`[GrubHub] Browser store failed ${card.name}: ${e.message.split('\n')[0]}`);
       }
     }
-
-    console.log(`[GrubHub] Done: ${results.length} results`);
-  } catch (err) {
-    console.error(`[GrubHub] Error:`, err.message.split('\n')[0]);
+  } catch(e) {
+    console.error('[GrubHub] Browser error:', e.message.split('\n')[0]);
   } finally {
     await browser.close();
   }
+  console.log(`[GrubHub] Browser done: ${results.length} results`);
   return results;
 }
 
