@@ -1,7 +1,7 @@
 const { chromium } = require('playwright');
 const { fetchStoreItems } = require('./grubhub');
 
-async function scrapeUberEats({ address, dish, credentials, headless = true, timeout = 45000 }) {
+async function scrapeUberEats({ address, dish, credentials, headless = true, timeout = 45000, lat, lng }) {
   const browser = await chromium.launch({
     headless,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled']
@@ -18,45 +18,31 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
   const results = [];
 
   try {
-    // Set address
-    await page.goto('https://www.ubereats.com', { waitUntil: 'domcontentloaded', timeout });
-    await page.waitForTimeout(2500);
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(400);
+    // Use coordinates if provided, otherwise fall back to address UI
+    const useLat = lat || 40.32099;
+    const useLng = lng || -74.0269;
 
-    await page.waitForFunction(() =>
-      Array.from(document.querySelectorAll('input[type="text"], input:not([type])')).some(i => i.offsetWidth > 0 && i.offsetHeight > 0),
-      { timeout: 8000 }
-    ).catch(() => {});
-
-    const inputHandle = await page.evaluateHandle(() =>
-      Array.from(document.querySelectorAll('input[type="text"], input:not([type])')).find(i => i.offsetWidth > 0 && i.offsetHeight > 0) || null
-    );
-    const addressInput = inputHandle.asElement();
-    if (addressInput) {
-      await addressInput.click({ force: true });
-      await addressInput.fill('');
-      await addressInput.type(address, { delay: 50 });
-      await page.waitForTimeout(2000);
-      await page.waitForSelector('li[role="option"]', { timeout: 5000 }).catch(() => {});
-
-      const suggestions = await page.evaluate(() =>
-        Array.from(document.querySelectorAll('li[role="option"]')).slice(0,3).map(s => s.innerText?.substring(0,60))
-      );
-      console.log(`[UberEats] Suggestions: ${JSON.stringify(suggestions)}`);
-
-      const suggestion = await page.$('li[role="option"]:first-child');
-      if (suggestion) { await suggestion.click({ force: true }); console.log('[UberEats] Address set'); }
-      else { await page.keyboard.press('ArrowDown'); await page.waitForTimeout(300); await page.keyboard.press('Enter'); }
-      await page.waitForTimeout(1500);
-      const confirmBtn = await page.$('button:has-text("Deliver here"), button:has-text("Confirm")');
-      if (confirmBtn) { await confirmBtn.click({ force: true }); await page.waitForTimeout(500); }
-      console.log(`[UberEats] URL after address: ${page.url()}`);
+    if (lat && lng) {
+      console.log(`[UberEats] Using provided coordinates: ${lat}, ${lng}`);
+    } else {
+      console.log(`[UberEats] No coordinates provided, using address fallback`);
     }
 
-    // Search
-    await page.goto(`https://www.ubereats.com/search?q=${encodeURIComponent(dish)}`, { waitUntil: 'domcontentloaded', timeout });
+    // Encode location into Uber Eats pl param — bypasses address UI entirely
+    const plObj = {
+      address: address,
+      referenceType: 'mapPin',
+      latitude: useLat,
+      longitude: useLng
+    };
+    const pl = Buffer.from(JSON.stringify(plObj)).toString('base64url');
+
+    const searchUrl = `https://www.ubereats.com/search?q=${encodeURIComponent(dish)}&pl=${pl}&diningMode=DELIVERY`;
+    console.log(`[UberEats] Searching with location: ${useLat}, ${useLng}`);
+    await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout });
     await page.waitForTimeout(3500);
+    console.log(`[UberEats] Search URL: ${page.url()}`);
+
     await page.waitForSelector('[data-testid="store-card"], a[href*="/store/"]', { timeout: 10000 }).catch(() => {});
 
     const rawCards = await page.evaluate(() => {
@@ -87,7 +73,6 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
       eta: card.eta, deliveryFee: null
     }));
 
-    // 3 parallel store visits per batch
     const CONCURRENCY = 3;
     for (let i = 0; i < storeData.length; i += CONCURRENCY) {
       const batch = storeData.slice(i, i + CONCURRENCY);

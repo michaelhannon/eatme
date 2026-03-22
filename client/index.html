@@ -289,7 +289,10 @@ footer p { font-size: 12px; color: var(--text-muted); }
       </div>
       <div class="field-group">
         <label class="field-label">Deliver to</label>
-        <input class="field-input" id="address" type="text" value="86 Horsneck Point Rd, Oceanport NJ 07757" />
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input class="field-input" id="address" type="text" value="86 Horsneck Point Rd, Oceanport NJ 07757" style="flex:1" />
+          <button onclick="detectLocation()" id="locBtn" title="Use my location" style="height:48px;width:48px;flex-shrink:0;background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:18px;transition:all .15s;box-shadow:var(--shadow-sm);" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">📍</button>
+        </div>
       </div>
       <div class="field-group">
         <label class="field-label" style="opacity:0">Go</label>
@@ -442,7 +445,7 @@ async function runSearch() {
     const res = await fetch('/api/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dish, address, platforms, rankBy: 'totalPrice' })
+      body: JSON.stringify({ dish, address, platforms, rankBy: 'totalPrice', lat: userLat, lng: userLng })
     });
     if (!res.ok) throw new Error(`Server error ${res.status}`);
     const data = await res.json();
@@ -573,6 +576,58 @@ function clearAll() {
 function showError(msg) {
   document.getElementById('errorText').textContent = msg;
   document.getElementById('errorBox').classList.add('active');
+}
+
+// Store user coordinates
+let userLat = null;
+let userLng = null;
+
+async function detectLocation() {
+  const btn = document.getElementById('locBtn');
+  const addrInput = document.getElementById('address');
+  
+  if (!navigator.geolocation) {
+    showError('Geolocation is not supported by your browser.');
+    return;
+  }
+
+  btn.textContent = '⏳';
+  btn.disabled = true;
+
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
+      userLat = position.coords.latitude;
+      userLng = position.coords.longitude;
+      
+      try {
+        // Reverse geocode using free Nominatim API
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${userLat}&lon=${userLng}&format=json`);
+        const data = await res.json();
+        const addr = data.display_name || `${userLat.toFixed(5)}, ${userLng.toFixed(5)}`;
+        // Format nicely: house number + road + city + state + zip
+        const a = data.address || {};
+        const formatted = [
+          a.house_number, a.road,
+          a.city || a.town || a.village,
+          a.state,
+          a.postcode
+        ].filter(Boolean).join(', ');
+        addrInput.value = formatted || addr;
+        btn.textContent = '✅';
+        setTimeout(() => { btn.textContent = '📍'; btn.disabled = false; }, 2000);
+      } catch(e) {
+        addrInput.value = `${userLat.toFixed(5)}, ${userLng.toFixed(5)}`;
+        btn.textContent = '✅';
+        setTimeout(() => { btn.textContent = '📍'; btn.disabled = false; }, 2000);
+      }
+    },
+    (err) => {
+      btn.textContent = '📍';
+      btn.disabled = false;
+      showError('Could not get your location. Please enter your address manually.');
+    },
+    { timeout: 10000, enableHighAccuracy: true }
+  );
 }
 
 document.addEventListener('keydown', e => {

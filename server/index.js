@@ -26,7 +26,9 @@ app.post('/api/search', async (req, res) => {
     dish,
     address = process.env.DEFAULT_ADDRESS || '86 Horsneck Point Rd, Oceanport NJ 07757',
     platforms = ['doordash', 'grubhub', 'seamless', 'ubereats'],
-    rankBy = 'totalPrice'
+    rankBy = 'totalPrice',
+    lat,
+    lng
   } = req.body;
 
   if (!dish) {
@@ -47,8 +49,10 @@ app.post('/api/search', async (req, res) => {
   const scraperConfig = {
     address,
     dish,
-    headless: true,   // always headless on Railway
-    timeout: parseInt(process.env.SCRAPE_TIMEOUT_MS || '45000')  // slightly longer for cloud
+    lat: lat ? parseFloat(lat) : null,
+    lng: lng ? parseFloat(lng) : null,
+    headless: true,
+    timeout: parseInt(process.env.SCRAPE_TIMEOUT_MS || '45000')
   };
 
   const jobs = [];

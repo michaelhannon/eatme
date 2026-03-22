@@ -1,6 +1,6 @@
 const { chromium } = require('playwright');
 
-async function scrapeGrubHub({ address, dish, credentials, headless = true, timeout = 45000, platform = 'GrubHub' }) {
+async function scrapeGrubHub({ address, dish, credentials, headless = true, timeout = 45000, platform = 'GrubHub', lat, lng }) {
   if (platform === 'Seamless') {
     console.log(`[Seamless] Skipping — same backend as GrubHub`);
     return [];
@@ -22,7 +22,10 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
 
   try {
     // Go directly to search URL with known Oceanport NJ coordinates
-    const searchUrl = `https://www.grubhub.com/search?orderMethod=delivery&locationMode=DELIVERY&facetSet=umamiV6&pageSize=20&hideHateos=true&searchMetrics=true&queryText=${encodeURIComponent(dish)}&latitude=40.32098388&longitude=-74.02689362&preciseLocation=true&geohash=dr5m7kpqb25m&sortSetId=umamiV3&countOmittingTimes=true`;
+    const useLat = lat || 40.32098388;
+    const useLng = lng || -74.02689362;
+    console.log(`[GrubHub] Using coordinates: ${useLat}, ${useLng}`);
+    const searchUrl = `https://www.grubhub.com/search?orderMethod=delivery&locationMode=DELIVERY&facetSet=umamiV6&pageSize=20&hideHateos=true&searchMetrics=true&queryText=${encodeURIComponent(dish)}&latitude=${useLat}&longitude=${useLng}&preciseLocation=true&sortSetId=umamiV3&countOmittingTimes=true`;
     await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout });
     await page.waitForTimeout(4000);
     console.log(`[GrubHub] Search URL: ${page.url()}`);
