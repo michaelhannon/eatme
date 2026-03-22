@@ -2,6 +2,14 @@ function aggregate(allResults, rankBy = 'totalPrice') {
   let results = allResults.flat().filter(Boolean);
   if (results.length === 0) return { ranked: [], summary: null };
 
+  // Remove restaurants where no item price was found — they add noise with no value
+  const withItems = results.filter(r => r.itemPrice != null);
+  // If we got at least some results with items, discard the no-item rows
+  if (withItems.length > 0) {
+    results = withItems;
+    console.log(`[Aggregator] Filtered to ${results.length} results with item prices`);
+  }
+
   // Compute total price
   results = results.map(r => {
     const total = r.totalPrice != null ? r.totalPrice
