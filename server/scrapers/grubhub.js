@@ -54,21 +54,42 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
       console.log(`[GrubHub] After address: ${page.url()}`);
     }
 
-    const searchInput = await page.waitForSelector(
-      'input[placeholder*="Search"], input[placeholder*="search"], input[name="search"]',
-      { timeout: 10000 }
-    ).catch(() => null);
-
-    if (searchInput) {
-      await searchInput.evaluate((el, val) => {
-        el.click();
-        el.value = val;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-      }, dish);
-      await page.waitForTimeout(500);
-      await page.keyboard.press('Enter');
-      await page.waitForTimeout(5000);
+    // Use direct search URL with the lat/lon GrubHub set after address entry
+    // This is more reliable than trying to interact with the search bar
+    const currentUrl = page.url();
+    const latMatch = currentUrl.match(/latitude=([^&]+)/);
+    const lonMatch = currentUrl.match(/longitude=([^&]+)/);
+    
+    let searchUrl;
+    if (latMatch && lonMatch) {
+      // Use the exact same search URL format that worked in logs
+      const lat = latMatch[1];
+      const lon = lonMatch[1];
+      searchUrl = `https://www.grubhub.com/search?orderMethod=delivery&locationMode=DELIVERY&facetSet=umamiV6&pageSize=20&hideHateos=true&searchMetrics=true&queryText=${encodeURIComponent(dish)}&latitude=${lat}&longitude=${lon}&preciseLocation=true&sortSetId=umamiV3&countOmittingTimes=true`;
+      console.log(`[GrubHub] Using coordinate-based search URL`);
+    } else {
+      // Fallback: use search bar
+      const searchInput = await page.waitForSelector(
+        'input[placeholder*="Search"], input[placeholder*="search"], input[name="search"]',
+        { timeout: 10000 }
+      ).catch(() => null);
+      if (searchInput) {
+        await searchInput.evaluate((el, val) => {
+          el.click();
+          el.value = val;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        }, dish);
+        await page.waitForTimeout(500);
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(5000);
+        searchUrl = page.url();
+      }
+    }
+    
+    if (searchUrl) {
+      await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout });
+      await page.waitForTimeout(4000);
       console.log(`[GrubHub] Search URL: ${page.url()}`);
     }
 
