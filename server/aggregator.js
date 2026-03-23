@@ -10,6 +10,14 @@ function aggregate(allResults, rankBy = 'totalPrice') {
     console.log(`[Aggregator] Filtered to ${results.length} results with item prices`);
   }
 
+  // Filter out obvious non-restaurants (retail stores, pharmacies, convenience stores)
+  const NON_RESTAURANT = /\b(five below|dollar tree|dollar general|walgreens|cvs|rite aid|walmart|target|costco|7-eleven|711|circle k|wawa|sheetz|gas station|pet store|petco|petsmart|office depot|staples|best buy|home depot|lowes|auto zone|autozone)\b/i;
+  const beforeFilter = results.length;
+  results = results.filter(r => !NON_RESTAURANT.test(r.restaurant));
+  if (results.length < beforeFilter) {
+    console.log(`[Aggregator] Filtered out ${beforeFilter - results.length} non-restaurant results`);
+  }
+
   // Compute total price
   results = results.map(r => {
     const total = r.totalPrice != null ? r.totalPrice
