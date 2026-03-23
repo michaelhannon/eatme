@@ -178,7 +178,15 @@ async function fetchStoreItems(context, store, dish, platform, baseUrl) {
       }
       const items = [];
       for (let i = 0; i < lines.length - 1; i++) {
-        if (!searchWords.some(w => lines[i].toLowerCase().includes(w))) continue;
+        const lineLower = lines[i].toLowerCase();
+        // Require word-boundary match — "roll" should match "Spring Roll" not "stroller"
+        if (!searchWords.some(w => {
+          const idx = lineLower.indexOf(w);
+          if (idx === -1) return false;
+          const before = idx === 0 || /[\s\-\/\(,]/.test(lineLower[idx-1]);
+          const after  = idx + w.length >= lineLower.length || /[\s\-\/\),:!]/.test(lineLower[idx+w.length]);
+          return before && after;
+        })) continue;
         if (lines[i].length > 100) continue;
         for (let j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
           const m = lines[j].match(/^\$(\d+\.\d{2})$/) || lines[j].match(/^\$(\d+)$/);

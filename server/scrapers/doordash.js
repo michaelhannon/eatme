@@ -12,9 +12,12 @@ function getProxyAgent() {
   const user = process.env.PROXY_USER;
   const pass = process.env.PROXY_PASS;
   if (!host || !port) return null;
-  const auth = user && pass ? `${encodeURIComponent(user)}:${encodeURIComponent(pass)}@` : '';
-  const proxyUrl = `http://${auth}${host}:${port}`;
-  console.log(`[DoorDash] Proxy: ${host}:${port}`);
+  // Build proxy URL — do NOT encode user/pass, special chars in sticky session
+  // suffixes (underscores, hyphens) must be passed as-is
+  const proxyUrl = user && pass
+    ? `http://${user}:${pass}@${host}:${port}`
+    : `http://${host}:${port}`;
+  console.log(`[DoorDash] Proxy: ${host}:${port} (auth: ${user ? 'yes' : 'no'})`);
   return new HttpsProxyAgent(proxyUrl);
 }
 
@@ -33,7 +36,7 @@ function fetchJson(url, agent) {
         'Referer':             'https://www.doordash.com/',
         'Origin':              'https://www.doordash.com',
       },
-      timeout: 15000,
+      timeout: 5000,
       ...(agent ? { agent } : { rejectUnauthorized: false })
     };
 
@@ -49,9 +52,11 @@ function fetchJson(url, agent) {
             resolve(null); return;
           }
           if (res.statusCode !== 200) {
+            global._lastDoorDashStatus = res.statusCode;
             console.log(`[DoorDash] Body sample: ${body.slice(0, 200)}`);
             resolve(null); return;
           }
+          global._lastDoorDashStatus = 200;
           resolve(JSON.parse(body));
         } catch (e) {
           console.log(`[DoorDash] Parse error: ${e.message}`);
@@ -90,11 +95,19 @@ async function scrapeDoorDash({ address, dish, lat, lng }) {
   ];
 
   let searchData = null;
+  let cloudflareBlocked = false;
   for (const url of searchEndpoints) {
+    if (cloudflareBlocked) break; // No point retrying if CF is blocking
     console.log(`[DoorDash] Trying: ${url.slice(0, 80)}`);
     searchData = await fetchJson(url, agent);
     if (searchData) break;
-    await new Promise(r => setTimeout(r, 500));
+    // Check if last response was a 403 Cloudflare block — fail fast
+    if (global._lastDoorDashStatus === 403) {
+      console.log('[DoorDash] Cloudflare 403 — skipping remaining endpoints');
+      cloudflareBlocked = true;
+      break;
+    }
+    await new Promise(r => setTimeout(r, 200));
   }
 
   if (!searchData) {

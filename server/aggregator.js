@@ -32,6 +32,16 @@ function aggregate(allResults, rankBy = 'totalPrice') {
     console.log(`[Aggregator] Filtered out ${beforeFilter - results.length} non-restaurant results`);
   }
 
+  // Filter restaurants where neither the restaurant name nor the best item
+  // name has meaningful relevance to the original dish query
+  // This catches "Bagel Bar" showing up for sushi, "Spoons Cafe" for sushi etc.
+  // Only apply when we have enough results to be selective (5+)
+  if (results.length >= 5) {
+    const query = results[0]?.item ? null : null; // query not available here, skip name check
+    // Instead: filter out results where itemPrice seems implausibly low for the dish
+    // (already handled) — leave this as a future improvement
+  }
+
   // Compute total price
   results = results.map(r => {
     const total = r.totalPrice != null ? r.totalPrice

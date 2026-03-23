@@ -189,6 +189,48 @@ app.post('/api/search', async (req, res) => {
     (servedFromCache ? ` (${bgPlatforms.join(', ')} from cache)` : ' (all live)')
   );
 
+  // Filter out off-topic results — restaurants where neither the name
+  // nor any item name meaningfully relates to the searched dish
+  // Expands cuisine keywords same as scrapers do
+  const CUISINE_EXPANSIONS = {
+    sushi:    ['sushi','roll','maki','sashimi','nigiri','tempura','ramen','udon','teriyaki'],
+    chinese:  ['chinese','fried rice','lo mein','chow mein','dumpling','egg roll','wonton','kung pao','general tso','orange chicken'],
+    indian:   ['indian','curry','tikka','masala','biryani','naan','tandoori','korma','paneer'],
+    pizza:    ['pizza','pie','pepperoni','margherita','calzone'],
+    burger:   ['burger','cheeseburger','hamburger'],
+    chicken:  ['chicken','wings','tenders','nuggets'],
+    taco:     ['taco','burrito','quesadilla','enchilada','mexican'],
+    thai:     ['thai','pad thai','satay','pho'],
+    pasta:    ['pasta','spaghetti','penne','fettuccine','lasagna'],
+  };
+  const dishLower = dish.toLowerCase();
+  let relevantWords = dishLower.split(' ').filter(w => w.length > 2);
+  for (const [key, words] of Object.entries(CUISINE_EXPANSIONS)) {
+    if (relevantWords.some(w => key.includes(w) || w.includes(key))) {
+      relevantWords = [...new Set([...relevantWords, ...words])];
+      break;
+    }
+  }
+  // Only filter if we have 8+ results (don't filter sparse result sets)
+  const flatResults = allRawResults.flat().filter(Boolean);
+  if (flatResults.length >= 8) {
+    for (const result of flatResults) {
+      if (!result) continue;
+      const nameMatch = relevantWords.some(w => result.restaurant?.toLowerCase().includes(w));
+      const itemMatch = relevantWords.some(w => result.item?.toLowerCase().includes(w));
+      if (!nameMatch && !itemMatch) result._irrelevant = true;
+    }
+    const before = flatResults.filter(r => !r._irrelevant).length;
+    // Only apply if removing irrelevant still leaves 5+ results
+    const relevant = flatResults.filter(r => !r._irrelevant);
+    if (relevant.length >= 5) {
+      allRawResults.forEach((arr, i) => {
+        allRawResults[i] = arr.filter(r => !r?._irrelevant);
+      });
+      console.log(`[Filter] Removed ${flatResults.length - relevant.length} off-topic results`);
+    }
+  }
+
   const { ranked, summary } = aggregate(allRawResults, rankBy);
 
   res.json({
