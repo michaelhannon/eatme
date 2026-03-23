@@ -11,9 +11,23 @@ function aggregate(allResults, rankBy = 'totalPrice') {
   }
 
   // Filter out obvious non-restaurants (retail stores, pharmacies, convenience stores)
-  const NON_RESTAURANT = /\b(five below|dollar tree|dollar general|walgreens|cvs|rite aid|walmart|target|costco|7-eleven|711|circle k|wawa|sheetz|gas station|pet store|petco|petsmart|office depot|staples|best buy|home depot|lowes|auto zone|autozone)\b/i;
+  // Use exact/start-of-name matching to avoid blocking "Sushi from Kroger" or "Asian Foods Market"
+  const NON_RESTAURANT_EXACT = [
+    /^five below\b/i, /^dollar tree\b/i, /^dollar general\b/i,
+    /^walgreens\b/i, /^cvs\b/i, /^rite aid\b/i,
+    /^walmart\b/i, /^target\b/i, /^costco\b/i,
+    /^7-eleven\b/i, /^circle k\b/i, /^wawa\b/i, /^sheetz\b/i,
+    /^petco\b/i, /^petsmart\b/i,
+    /^office depot\b/i, /^staples\b/i, /^best buy\b/i,
+    /^home depot\b/i, /^lowe's?\b/i, /^autozone\b/i,
+    /^michaels?\b/i, /^hobby lobby\b/i, /^jo-?ann\b/i,
+    /^bed bath\b/i, /^ulta\b/i, /^sephora\b/i,
+    /^gap\b/i, /^old navy\b/i, /^forever 21\b/i,
+    /^food giant\b/i, /^food lion\b/i,
+    /^total wine\b/i, /^bevmo\b/i,
+  ];
   const beforeFilter = results.length;
-  results = results.filter(r => !NON_RESTAURANT.test(r.restaurant));
+  results = results.filter(r => !NON_RESTAURANT_EXACT.some(re => re.test(r.restaurant)));
   if (results.length < beforeFilter) {
     console.log(`[Aggregator] Filtered out ${beforeFilter - results.length} non-restaurant results`);
   }
