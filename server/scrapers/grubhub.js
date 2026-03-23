@@ -61,7 +61,7 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
         const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
         if (lines[0] && lines[0].length > 2) {
           out.push({ href, name: lines[0], text, lines });
-          if (out.length >= 8) break;
+          if (out.length >= 15) break;
         }
       }
       return out;
@@ -176,23 +176,52 @@ async function fetchStoreItems(context, store, dish, platform, baseUrl) {
         if (/free delivery/i.test(line)) { deliveryFee = 0; break; }
         if (/delivery fee/i.test(line)) { const m = line.match(/\$(\d+\.?\d*)/); if (m) { deliveryFee = parseFloat(m[1]); break; } }
       }
+      // Check if the restaurant name itself matches the cuisine —
+      // if so, grab cheapest items regardless of item keyword match
+      // e.g. "Toki Sushi" for a "sushi" search — grab any priced items
+      const storeNameLower = (typeof searchDish === 'string' ? '' : '');
+      const pageTitle = document.title.toLowerCase();
+      const restaurantIsCuisine = dishWords.some(w => pageTitle.includes(w)) ||
+        searchWords.some(w => pageTitle.includes(w));
+
       const items = [];
+      // First pass: keyword-matched items
       for (let i = 0; i < lines.length - 1; i++) {
         const lineLower = lines[i].toLowerCase();
-        // Require word-boundary match — "roll" should match "Spring Roll" not "stroller"
-        if (!searchWords.some(w => {
+        const wordMatch = searchWords.some(w => {
           const idx = lineLower.indexOf(w);
           if (idx === -1) return false;
           const before = idx === 0 || /[\s\-\/\(,]/.test(lineLower[idx-1]);
           const after  = idx + w.length >= lineLower.length || /[\s\-\/\),:!]/.test(lineLower[idx+w.length]);
           return before && after;
-        })) continue;
+        });
+        if (!wordMatch) continue;
         if (lines[i].length > 100) continue;
+        const lineL = lines[i].toLowerCase();
+        if (/\broll(ed|ing|s up)\b/.test(lineL) && !/\b(sushi|maki|spring|egg|hand|dragon|rainbow|california|spicy|inside.?out)\b/.test(lineL)) continue;
         for (let j = i + 1; j <= Math.min(i + 3, lines.length - 1); j++) {
           const m = lines[j].match(/^\$(\d+\.\d{2})$/) || lines[j].match(/^\$(\d+)$/);
           if (m) { const p = parseFloat(m[1]); if (p > 1 && p < 150) { items.push({ name: lines[i].substring(0, 70), price: p }); break; } }
         }
-        if (items.length >= 4) break;
+        if (items.length >= 6) break;
+      }
+
+      // Second pass: if restaurant is clearly this cuisine but we found no items,
+      // grab the cheapest priced items from the menu (any item)
+      if (items.length === 0 && restaurantIsCuisine) {
+        const priceLines = [];
+        for (let i = 1; i < lines.length - 1; i++) {
+          const m = lines[i].match(/^\$(\d+\.\d{2})$/) || lines[i].match(/^\$(\d+)$/);
+          if (m) {
+            const p = parseFloat(m[1]);
+            if (p > 1 && p < 150 && lines[i-1].length < 80 && lines[i-1].length > 3) {
+              priceLines.push({ name: lines[i-1].substring(0, 70), price: p });
+            }
+          }
+        }
+        // Sort by price and take cheapest 4
+        priceLines.sort((a, b) => a.price - b.price);
+        items.push(...priceLines.slice(0, 4));
       }
       const seen = new Set();
       return { deliveryFee, storeLat, storeLng, items: items.filter(r => { const k=`${r.name}|${r.price}`; if(seen.has(k))return false; seen.add(k); return true; }) };

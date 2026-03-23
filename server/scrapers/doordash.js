@@ -169,7 +169,7 @@ async function scrapeDoorDash({ address, dish, lat, lng }) {
 
     const items = [];
     const walk  = (obj, depth = 0) => {
-      if (!obj || typeof obj !== 'object' || depth > 8 || items.length >= 4) return;
+      if (!obj || typeof obj !== 'object' || depth > 8 || items.length >= 6) return;
       if (obj.name != null && (obj.price != null || obj.display_price != null)) {
         const name  = String(obj.name).trim();
         const price = parsePrice(obj.price ?? obj.display_price ?? obj.unit_price);

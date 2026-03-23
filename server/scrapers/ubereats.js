@@ -62,7 +62,7 @@ async function scrapeUberEats({ address, dish, credentials, headless = true, tim
         const cityMatch = fullText.match(/([A-Z][a-zA-Z\s]+),\s*([A-Z]{2})\b/) || name.match(/\(([^)]+)\)/);
         const city = cityMatch ? (cityMatch[2] ? cityMatch[1].trim() + ', ' + cityMatch[2] : cityMatch[1].trim()) : null;
         out.push({ href, name, ratingLine, eta: etaMatch?.[1]?.trim() || null, deliveryFee: null, distance: distMatch ? distMatch[1] + ' mi' : null, city });
-        if (out.length >= 8) break;
+        if (out.length >= 15) break;
       }
       return out;
     });
