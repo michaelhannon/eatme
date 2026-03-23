@@ -31,7 +31,14 @@ async function scrapeGrubHub({ address, dish, credentials, headless = true, time
     const searchUrl = `https://www.grubhub.com/search?orderMethod=delivery&locationMode=DELIVERY&facetSet=umamiV6&pageSize=20&hideHateos=true&searchMetrics=true&queryText=${encodeURIComponent(dish)}&latitude=${useLat}&longitude=${useLng}&preciseLocation=true&sortSetId=umamiV3&countOmittingTimes=true`;
     await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout });
     await page.waitForTimeout(4000);
-    console.log(`[GrubHub] Search URL: ${page.url()}`);
+    const finalUrl = page.url();
+    console.log(`[GrubHub] Search URL: ${finalUrl}`);
+    // If GrubHub redirected to pickup mode, no delivery available here — skip
+    if (finalUrl.includes('orderMethod=pickup') || finalUrl.includes('locationMode=PICKUP')) {
+      console.log('[GrubHub] Redirected to pickup mode — no delivery available at this location, skipping');
+      await browser.close();
+      return [];
+    }
 
     await page.waitForSelector('a[href*="/restaurant/"]', { timeout: 8000 }).catch(() => {});
     const linkCount = await page.evaluate(() => document.querySelectorAll('a[href*="/restaurant/"]').length);
@@ -149,6 +156,11 @@ async function fetchStoreItems(context, store, dish, platform, baseUrl) {
         soup: ['soup','broth','bisque','chowder'],
         sushi: ['sushi','roll','maki','sashimi'],
         taco: ['taco','burrito','quesadilla','enchilada'],
+        chinese: ['chinese','fried rice','lo mein','chow mein','dumpling','egg roll','wonton','kung pao','general tso','orange chicken','beef broccoli','spring roll','sesame','szechuan','mongolian'],
+        indian: ['indian','curry','tikka','masala','biryani','naan','tandoori','korma','saag','paneer','dal','samosa'],
+        japanese: ['japanese','ramen','sushi','tempura','teriyaki','udon','miso','katsu'],
+        thai: ['thai','pad thai','curry','satay','pho','spring roll','basil','coconut'],
+        mexican: ['mexican','taco','burrito','quesadilla','enchilada','guacamole','salsa','nacho'],
       };
       let searchWords = [...dishWords];
       for (const [key, words] of Object.entries(expansions)) {
