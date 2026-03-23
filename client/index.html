@@ -337,6 +337,38 @@ footer { border-top: 1px solid var(--border); margin-top: 40px; background: var(
 .footer-faq details[open] summary::after { content: ' −'; }
 .footer-faq details p { font-size: 12px; color: var(--text-secondary); line-height: 1.65; margin-top: 8px; }
 .footer-legal { font-size: 11px; color: var(--text-muted); }
+
+/* Autocomplete */
+.autocomplete-wrap { position: relative; }
+.autocomplete-list { position: absolute; top: 100%; left: 0; right: 0; background: var(--white); border: 1.5px solid var(--border); border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm); box-shadow: var(--shadow-md); z-index: 200; max-height: 220px; overflow-y: auto; }
+.autocomplete-item { padding: 9px 14px; font-size: 13px; font-weight: 500; color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background .1s; }
+.autocomplete-item:hover, .autocomplete-item.selected { background: var(--accent-light); color: var(--accent); }
+.autocomplete-icon { font-size: 15px; flex-shrink: 0; }
+
+/* Near me label */
+.addr-wrap { position: relative; }
+.near-me-label { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 14px; font-weight: 600; color: var(--accent); pointer-events: none; display: none; }
+.addr-wrap.using-location .field-input { color: transparent; }
+.addr-wrap.using-location .near-me-label { display: block; }
+
+/* Live platform status */
+.lp-item { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 90px; }
+.lp-badge { font-size: 10px; font-weight: 700; padding: 3px 10px; border-radius: 5px; }
+.lp-badge.gh { background: #fff4f4; color: var(--gh); }
+.lp-badge.ue { background: #f0fdf6; color: var(--ue); }
+.lp-badge.dd { background: #fff2f2; color: var(--dd); }
+.lp-status { font-size: 11px; color: var(--text-muted); font-weight: 500; transition: color .3s; }
+.lp-status.done { color: var(--green); font-weight: 700; }
+.lp-status.searching { color: var(--accent); }
+.lp-bar { width: 80px; height: 3px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.lp-bar-fill { height: 100%; width: 0%; border-radius: 3px; transition: width .3s; }
+.lp-bar-fill.gh { background: var(--gh); }
+.lp-bar-fill.ue { background: var(--ue); }
+.lp-bar-fill.dd { background: var(--dd); }
+.lp-bar-fill.done { width: 100% !important; }
+@keyframes barPulse { 0%{width:0%} 50%{width:100%} 100%{width:0%;margin-left:100%} }
+.lp-bar-fill.searching { animation: barPulse 1.5s ease-in-out infinite; }
+
 </style>
 </head>
 <body>
@@ -380,12 +412,16 @@ footer { border-top: 1px solid var(--border); margin-top: 40px; background: var(
     <div class="search-bar">
       <div class="field-group">
         <label class="field-label">What are you craving?</label>
-        <input class="field-input" id="dish" type="text" placeholder="pizza, pad thai, chicken wings..." />
+        <div class="autocomplete-wrap">
+          <input class="field-input" id="dish" type="text" placeholder="pizza, pad thai, chicken wings..." autocomplete="off" oninput="onDishInput(this.value)" onkeydown="onDishKeydown(event)" onfocus="onDishInput(this.value)" onblur="setTimeout(hideAutocomplete,150)" />
+          <div class="autocomplete-list" id="autocompleteList" style="display:none"></div>
+        </div>
       </div>
       <div class="field-group">
         <label class="field-label">Deliver to</label>
         <div class="addr-wrap">
-          <input class="field-input" id="address" type="text" value="86 Horsneck Point Rd, Oceanport NJ 07757" oninput="userLat=null;userLng=null;" />
+          <span class="near-me-label" id="nearMeLabel">📍 Near me</span>
+          <input class="field-input" id="address" type="text" placeholder="Delivery address" oninput="onAddressInput()" />
           <button class="loc-btn" id="locBtn" onclick="detectLocation()" title="Use my location">📍</button>
         </div>
       </div>
@@ -416,16 +452,21 @@ footer { border-top: 1px solid var(--border); margin-top: 40px; background: var(
     <div class="loading-spinner"><span></span><span></span><span></span></div>
     <div class="loading-title" id="loadingMsg">Searching all platforms...</div>
     <div class="loading-sub">Comparing live prices — usually under 45 seconds</div>
-    <div class="loading-platforms">
-      <div class="lp-item">
+    <div class="loading-platforms" id="loadingPlatforms">
+      <div class="lp-item" id="lp-grubhub">
         <div class="lp-badge gh">GrubHub</div>
-        <div class="lp-bar"><div class="lp-bar-fill gh"></div></div>
-        <div class="lp-status">Searching...</div>
+        <div class="lp-bar"><div class="lp-bar-fill gh" id="lpbar-grubhub"></div></div>
+        <div class="lp-status" id="lpstatus-grubhub">Waiting...</div>
       </div>
-      <div class="lp-item">
+      <div class="lp-item" id="lp-ubereats">
         <div class="lp-badge ue">Uber Eats</div>
-        <div class="lp-bar"><div class="lp-bar-fill ue"></div></div>
-        <div class="lp-status">Searching...</div>
+        <div class="lp-bar"><div class="lp-bar-fill ue" id="lpbar-ubereats"></div></div>
+        <div class="lp-status" id="lpstatus-ubereats">Waiting...</div>
+      </div>
+      <div class="lp-item" id="lp-doordash">
+        <div class="lp-badge dd">DoorDash</div>
+        <div class="lp-bar"><div class="lp-bar-fill dd" id="lpbar-doordash"></div></div>
+        <div class="lp-status" id="lpstatus-doordash">Waiting...</div>
       </div>
     </div>
   </div>
@@ -498,6 +539,32 @@ let restaurants = [];
 let currentSort = 'totalPrice';
 let userLat = null;
 let userLng = null;
+let usingNearMe = false;
+
+// ── Autocomplete data ──
+const SUGGESTIONS = [
+  { icon: '🍕', label: 'Pizza' },
+  { icon: '🍣', label: 'Sushi' },
+  { icon: '🍔', label: 'Burger' },
+  { icon: '🍗', label: 'Chicken wings' },
+  { icon: '🌮', label: 'Tacos' },
+  { icon: '🍜', label: 'Ramen' },
+  { icon: '🍛', label: 'Indian curry' },
+  { icon: '🥡', label: 'Chinese food' },
+  { icon: '🍝', label: 'Pasta' },
+  { icon: '🥪', label: 'Sandwich' },
+  { icon: '🌯', label: 'Burrito' },
+  { icon: '🍱', label: 'Bento' },
+  { icon: '🥗', label: 'Salad' },
+  { icon: '🍦', label: 'Dessert' },
+  { icon: '🍟', label: 'Fries' },
+  { icon: '🦞', label: 'Seafood' },
+  { icon: '🥩', label: 'Steak' },
+  { icon: '🫔', label: 'Wrap' },
+  { icon: '🍱', label: 'Pad Thai' },
+  { icon: '🧆', label: 'Falafel' },
+];
+let acSelectedIdx = -1;
 
 const LOADING_MSGS = [
   'Searching GrubHub and Uber Eats...',
@@ -565,6 +632,107 @@ function sortRestaurants(groups, by) {
 }
 function parseEta(eta) { if(!eta) return 999; const m=eta.match(/(\d+)/); return m?parseInt(m[1]):999; }
 
+// ── Address / Near Me ──
+function onAddressInput() {
+  userLat = null; userLng = null;
+  usingNearMe = false;
+  document.getElementById('addr-wrap') && document.getElementById('addr-wrap').classList.remove('using-location');
+  document.querySelector('.addr-wrap').classList.remove('using-location');
+}
+
+// ── Autocomplete ──
+function onDishInput(val) {
+  const list = document.getElementById('autocompleteList');
+  acSelectedIdx = -1;
+  if (!val.trim()) {
+    // Show all suggestions on empty focus
+    showSuggestions(SUGGESTIONS.slice(0, 8));
+    return;
+  }
+  const q = val.toLowerCase();
+  const filtered = SUGGESTIONS.filter(s => s.label.toLowerCase().includes(q));
+  if (filtered.length === 0) { hideAutocomplete(); return; }
+  showSuggestions(filtered.slice(0, 6));
+}
+
+function showSuggestions(items) {
+  const list = document.getElementById('autocompleteList');
+  list.innerHTML = items.map((s, i) =>
+    `<div class="autocomplete-item" data-val="${s.label}" onmousedown="selectSuggestion('${s.label}')">
+      <span class="autocomplete-icon">${s.icon}</span>${s.label}
+    </div>`
+  ).join('');
+  list.style.display = 'block';
+}
+
+function hideAutocomplete() {
+  document.getElementById('autocompleteList').style.display = 'none';
+  acSelectedIdx = -1;
+}
+
+function selectSuggestion(val) {
+  document.getElementById('dish').value = val;
+  hideAutocomplete();
+  document.getElementById('dish').focus();
+}
+
+function onDishKeydown(e) {
+  const list = document.getElementById('autocompleteList');
+  const items = list.querySelectorAll('.autocomplete-item');
+  if (!items.length) return;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    acSelectedIdx = Math.min(acSelectedIdx + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle('selected', i === acSelectedIdx));
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    acSelectedIdx = Math.max(acSelectedIdx - 1, 0);
+    items.forEach((el, i) => el.classList.toggle('selected', i === acSelectedIdx));
+  } else if (e.key === 'Enter') {
+    if (acSelectedIdx >= 0 && items[acSelectedIdx]) {
+      e.preventDefault();
+      selectSuggestion(items[acSelectedIdx].dataset.val);
+    }
+  } else if (e.key === 'Escape') {
+    hideAutocomplete();
+  }
+}
+
+// ── Live platform status ──
+function setPlatformStatus(platform, status) {
+  // map platform names to element ids
+  const id = platform === 'ubereats' ? 'ubereats' : platform === 'grubhub' || platform === 'seamless' ? 'grubhub' : 'doordash';
+  const statusEl = document.getElementById(`lpstatus-${id}`);
+  const barEl    = document.getElementById(`lpbar-${id}`);
+  if (!statusEl || !barEl) return;
+  if (status === 'start') {
+    statusEl.textContent = 'Searching...';
+    statusEl.className = 'lp-status searching';
+    barEl.className = barEl.className.replace('done','').trim() + ' searching';
+  } else if (status === 'done') {
+    statusEl.className = 'lp-status done';
+    barEl.className = barEl.className.replace('searching','').trim() + ' done';
+  }
+}
+
+function setPlatformCount(platform, count, fromCache) {
+  const id = platform === 'ubereats' ? 'ubereats' : platform === 'grubhub' || platform === 'seamless' ? 'grubhub' : 'doordash';
+  const statusEl = document.getElementById(`lpstatus-${id}`);
+  if (!statusEl) return;
+  const cacheTag = fromCache ? ' ⚡' : '';
+  statusEl.textContent = count > 0 ? `${count} results${cacheTag}` : `No results${cacheTag}`;
+  statusEl.className = 'lp-status done';
+}
+
+function resetPlatformStatus() {
+  ['grubhub','ubereats','doordash'].forEach(id => {
+    const s = document.getElementById(`lpstatus-${id}`);
+    const b = document.getElementById(`lpbar-${id}`);
+    if (s) { s.textContent = 'Waiting...'; s.className = 'lp-status'; }
+    if (b) { b.className = b.className.replace('searching','').replace('done','').trim(); }
+  });
+}
+
 async function runSearch() {
   const dish = document.getElementById('dish').value.trim();
   const address = document.getElementById('address').value.trim();
@@ -572,25 +740,47 @@ async function runSearch() {
   if (!dish) { showError('Please enter a dish to search for.'); return; }
   if (!platforms.length) { showError('Please select at least one platform.'); return; }
 
+  hideAutocomplete();
   clearAll();
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('loading').classList.add('active');
   document.getElementById('searchBtn').disabled = true;
+  resetPlatformStatus();
   startLoading();
 
   try {
-    const res = await fetch('/api/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dish, address, platforms, rankBy: 'totalPrice', lat: userLat, lng: userLng })
+    const params = new URLSearchParams({
+      dish, address,
+      platforms: platforms.join(','),
+      rankBy: 'totalPrice',
+      ...(userLat ? { lat: userLat } : {}),
+      ...(userLng ? { lng: userLng } : {})
     });
-    if (!res.ok) throw new Error(`Server error ${res.status}`);
-    const data = await res.json();
-    allResults = data.results || [];
-    restaurants = groupByRestaurant(allResults);
-    renderSummary(data.summary, data.elapsedSeconds, dish);
-    renderRestaurants(restaurants, currentSort);
-    document.getElementById('results').classList.add('active');
+
+    const es = new EventSource(`/api/search/stream?${params}`);
+
+    await new Promise((resolve, reject) => {
+      es.addEventListener('platform_start', e => {
+        const { platform } = JSON.parse(e.data);
+        setPlatformStatus(platform, 'start');
+      });
+      es.addEventListener('platform_done', e => {
+        const { platform, count, fromCache } = JSON.parse(e.data);
+        setPlatformStatus(platform, 'done');
+        setPlatformCount(platform, count, fromCache);
+      });
+      es.addEventListener('complete', e => {
+        es.close();
+        const data = JSON.parse(e.data);
+        allResults = data.results || [];
+        restaurants = groupByRestaurant(allResults);
+        renderSummary(data.summary, data.elapsedSeconds, dish);
+        renderRestaurants(restaurants, currentSort);
+        document.getElementById('results').classList.add('active');
+        resolve();
+      });
+      es.onerror = () => { es.close(); reject(new Error('Stream error')); };
+    });
   } catch(e) {
     showError('Search failed: ' + e.message);
     document.getElementById('emptyState').style.display = 'block';
@@ -726,6 +916,9 @@ async function detectLocation() {
         } catch(e) {
           document.getElementById('address').value = `${userLat.toFixed(5)}, ${userLng.toFixed(5)}`;
         }
+        // Show "Near me" instead of full address
+        usingNearMe = true;
+        document.querySelector('.addr-wrap').classList.add('using-location');
         btn.textContent = '✅';
         setTimeout(() => { btn.textContent = '📍'; btn.disabled = false; }, 2000);
         resolve();
@@ -743,7 +936,7 @@ document.addEventListener('DOMContentLoaded', () => {
     addrInput.value = '';
     addrInput.placeholder = 'Detecting your location...';
     detectLocation().finally(() => {
-      addrInput.placeholder = 'Delivery address';
+      addrInput.placeholder = 'Your delivery address';
     });
   }
 });

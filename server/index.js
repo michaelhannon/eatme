@@ -217,7 +217,16 @@ app.post('/api/search', async (req, res) => {
     for (const result of flatResults) {
       if (!result) continue;
       const nameMatch = relevantWords.some(w => result.restaurant?.toLowerCase().includes(w));
-      const itemMatch = relevantWords.some(w => result.item?.toLowerCase().includes(w));
+      const itemLower = result.item?.toLowerCase() || '';
+      // Reject verb-form "rolled" matches (sandwich descriptions)
+      const verbRoll = /\broll(ed|ing|s up)\b/.test(itemLower) && !/\b(sushi|maki|spring|egg|hand|dragon|rainbow|california|spicy)\b/.test(itemLower);
+      const itemMatch = !verbRoll && relevantWords.some(w => {
+        const idx = itemLower.indexOf(w);
+        if (idx === -1) return false;
+        const before = idx === 0 || /[\s\-\/\(,]/.test(itemLower[idx-1]);
+        const after  = idx + w.length >= itemLower.length || /[\s\-\/\),:!]/.test(itemLower[idx+w.length]);
+        return before && after;
+      });
       if (!nameMatch && !itemMatch) result._irrelevant = true;
     }
     const before = flatResults.filter(r => !r._irrelevant).length;
@@ -261,6 +270,135 @@ app.post('/api/search', async (req, res) => {
       });
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// Streaming search endpoint — Server-Sent Events for live platform status
+// ---------------------------------------------------------------------------
+app.get('/api/search/stream', async (req, res) => {
+  const {
+    dish,
+    address = process.env.DEFAULT_ADDRESS || '86 Horsneck Point Rd, Oceanport NJ 07757',
+    platforms: platformsParam = 'doordash,grubhub,seamless,ubereats',
+    rankBy = 'totalPrice',
+    lat, lng
+  } = req.query;
+
+  if (!dish) { res.status(400).end(); return; }
+
+  const platforms = platformsParam.split(',').filter(Boolean);
+
+  // Set up SSE
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const send = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const startTime = Date.now();
+
+  // Geocode if needed
+  let resolvedLat = lat ? parseFloat(lat) : null;
+  let resolvedLng = lng ? parseFloat(lng) : null;
+  if (resolvedLat == null || resolvedLng == null) {
+    const geo = await geocode(address);
+    if (geo) { resolvedLat = geo.lat; resolvedLng = geo.lng; }
+  }
+
+  const geoKey = (resolvedLat != null && resolvedLng != null)
+    ? geohash.encode(resolvedLat, resolvedLng, 6)
+    : _addressHash(address);
+
+  const creds = {
+    doordash: { email: process.env.DOORDASH_EMAIL, password: process.env.DOORDASH_PASSWORD },
+    grubhub:  { email: process.env.GRUBHUB_EMAIL,  password: process.env.GRUBHUB_PASSWORD },
+    ubereats: { email: process.env.UBEREATS_EMAIL,  password: process.env.UBEREATS_PASSWORD }
+  };
+
+  const scraperConfig = {
+    address, dish,
+    lat: resolvedLat, lng: resolvedLng,
+    headless: true,
+    timeout: parseInt(process.env.SCRAPE_TIMEOUT_MS || '45000'),
+    credentials: null
+  };
+
+  const allRawResults = Array(platforms.length).fill([]);
+
+  // Send initial status for all platforms
+  platforms.forEach(p => send('platform_start', { platform: p }));
+
+  // Run each platform and stream results as they complete
+  await Promise.all(platforms.map(async (p, idx) => {
+    const cacheKey = cache.buildKey(p, geoKey, dish);
+    let results = [];
+
+    // Check cache first
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      results = cached.results;
+      send('platform_done', { platform: p, count: results.length, fromCache: true });
+    } else {
+      const cfg = { ...scraperConfig, credentials: creds[p === 'seamless' ? 'grubhub' : p] || {} };
+      results = await runAndCache(p, cfg, cacheKey);
+      send('platform_done', { platform: p, count: results.length, fromCache: false });
+    }
+
+    allRawResults[idx] = results;
+  }));
+
+  // Apply distance calculation
+  if (resolvedLat && resolvedLng) {
+    for (const result of allRawResults.flat()) {
+      if (!result) continue;
+      if (!result.distance && result.storeLat && result.storeLng) {
+        result.distance = haversine(resolvedLat, resolvedLng, result.storeLat, result.storeLng) + ' mi';
+      }
+    }
+  }
+
+  // Apply relevance filter
+  const CUISINE_EXPANSIONS = {
+    sushi:    ['sushi','roll','maki','sashimi','nigiri','tempura','ramen','udon','teriyaki'],
+    chinese:  ['chinese','fried rice','lo mein','chow mein','dumpling','egg roll','wonton','kung pao','general tso','orange chicken'],
+    indian:   ['indian','curry','tikka','masala','biryani','naan','tandoori','korma','paneer'],
+    pizza:    ['pizza','pie','pepperoni','margherita','calzone'],
+    burger:   ['burger','cheeseburger','hamburger'],
+    chicken:  ['chicken','wings','tenders','nuggets'],
+    taco:     ['taco','burrito','quesadilla','enchilada','mexican'],
+    thai:     ['thai','pad thai','satay','pho'],
+    pasta:    ['pasta','spaghetti','penne','fettuccine','lasagna'],
+  };
+  const dishLower = dish.toLowerCase();
+  let relevantWords = dishLower.split(' ').filter(w => w.length > 2);
+  for (const [key, words] of Object.entries(CUISINE_EXPANSIONS)) {
+    if (relevantWords.some(w => key.includes(w) || w.includes(key))) {
+      relevantWords = [...new Set([...relevantWords, ...words])]; break;
+    }
+  }
+  const flatResults = allRawResults.flat().filter(Boolean);
+  if (flatResults.length >= 8) {
+    flatResults.forEach(result => {
+      const nameMatch = relevantWords.some(w => result.restaurant?.toLowerCase().includes(w));
+      const itemLower = result.item?.toLowerCase() || '';
+      const verbRoll = /\broll(ed|ing|s up)\b/.test(itemLower) && !/\b(sushi|maki|spring|egg|hand|dragon|rainbow|california|spicy)\b/.test(itemLower);
+      const itemMatch = !verbRoll && relevantWords.some(w => { const idx = itemLower.indexOf(w); if (idx === -1) return false; const before = idx === 0 || /[\s\-\/\(,]/.test(itemLower[idx-1]); const after = idx + w.length >= itemLower.length || /[\s\-\/\),:!]/.test(itemLower[idx+w.length]); return before && after; });
+      if (!nameMatch && !itemMatch) result._irrelevant = true;
+    });
+    const relevant = flatResults.filter(r => !r._irrelevant);
+    if (relevant.length >= 5) {
+      allRawResults.forEach((arr, i) => { allRawResults[i] = arr.filter(r => !r?._irrelevant); });
+    }
+  }
+
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  const { ranked, summary } = aggregate(allRawResults, rankBy);
+
+  send('complete', { dish, address, rankBy, elapsedSeconds: parseFloat(elapsed), summary, results: ranked });
+  res.end();
 });
 
 // ---------------------------------------------------------------------------
