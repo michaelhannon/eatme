@@ -1,170 +1,185 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Terms of Service - VeloCoreLab</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #0a0e1a 0%, #1e293b 100%);
-            color: #cbd5e1;
-            line-height: 1.8;
-            padding: 40px 20px;
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        
-        h1 {
-            color: white;
-            font-size: 36px;
-            margin-bottom: 8px;
-        }
-        
-        h2 {
-            color: white;
-            font-size: 24px;
-            margin-top: 32px;
-            margin-bottom: 16px;
-        }
-        
-        h3 {
-            color: #3b82f6;
-            font-size: 18px;
-            margin-top: 24px;
-            margin-bottom: 12px;
-        }
-        
-        p {
-            margin-bottom: 16px;
-        }
-        
-        ul {
-            margin-bottom: 16px;
-            padding-left: 24px;
-        }
-        
-        a {
-            color: #22d3ee;
-            text-decoration: none;
-        }
-        
-        a:hover {
-            text-decoration: underline;
-        }
-        
-        .back-button {
-            display: inline-block;
-            background: rgba(59,130,246,0.2);
-            color: #3b82f6;
-            padding: 12px 24px;
-            border-radius: 8px;
-            text-decoration: none;
-            margin-bottom: 32px;
-            border: 1px solid rgba(59,130,246,0.3);
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Terms of Service — EatMe</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0f0f17;
+      color: #e2e2f0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: #13131f;
+      border-bottom: 1px solid #2a2a3d;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header a {
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo-icon {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, #7c3aed, #4f46e5);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .logo-text {
+      font-size: 20px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.3px;
+    }
+    main {
+      flex: 1;
+      max-width: 760px;
+      margin: 60px auto;
+      padding: 0 24px 60px;
+      width: 100%;
+    }
+    .page-label {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #7c3aed;
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-size: 36px;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }
+    .last-updated {
+      font-size: 14px;
+      color: #6b6b8a;
+      margin-bottom: 48px;
+    }
+    h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      margin: 40px 0 12px;
+    }
+    p { color: #a0a0c0; margin-bottom: 16px; }
+    ul {
+      color: #a0a0c0;
+      padding-left: 20px;
+      margin-bottom: 16px;
+    }
+    ul li { margin-bottom: 8px; }
+    a { color: #7c3aed; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .divider {
+      border: none;
+      border-top: 1px solid #2a2a3d;
+      margin: 40px 0;
+    }
+    footer {
+      background: #13131f;
+      border-top: 1px solid #2a2a3d;
+      padding: 28px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .footer-copy {
+      font-size: 13px;
+      color: #6b6b8a;
+    }
+    .footer-copy strong { color: #a0a0c0; }
+    .footer-links {
+      display: flex;
+      gap: 24px;
+    }
+    .footer-links a {
+      font-size: 13px;
+      color: #6b6b8a;
+    }
+    .footer-links a:hover { color: #a0a0c0; }
+  </style>
 </head>
 <body>
-    <a href="index.html" class="back-button">← Back to Home</a>
-    
+  <header>
+    <a href="/">
+      <div class="logo-icon">🍽️</div>
+      <span class="logo-text">EatMe</span>
+    </a>
+  </header>
+
+  <main>
+    <div class="page-label">Legal</div>
     <h1>Terms of Service</h1>
-    <p style="color: #94a3b8; font-size: 14px;">Last Updated: February 10, 2026</p>
-    
-    <h2>1. Acceptance of Terms</h2>
-    <p>By accessing and using VeloCoreLab ("Service"), you accept and agree to be bound by these Terms of Service. If you do not agree, do not use this Service.</p>
-    
-    <h2>2. Medical Disclaimer</h2>
-    <p><strong>IMPORTANT:</strong> Consult a physician before beginning any exercise program. These training programs are for educational purposes only and are not medical advice. You use this Service at your own risk.</p>
-    
-    <h3>Assumption of Risk:</h3>
+    <p class="last-updated">Last updated: March 23, 2026</p>
+
+    <p>Welcome to EatMe. By accessing or using our service at <a href="https://www.eatme.tech">www.eatme.tech</a>, you agree to be bound by these Terms of Service. Please read them carefully.</p>
+
+    <h2>1. About EatMe</h2>
+    <p>EatMe is an independent food delivery price comparison tool. We retrieve publicly available pricing information from third-party food delivery platforms — including DoorDash, Grubhub, Seamless, and Uber Eats — and display it side-by-side to help users make informed ordering decisions. EatMe is not affiliated with, endorsed by, or partnered with any of these platforms.</p>
+
+    <h2>2. Use of the Service</h2>
+    <p>EatMe is provided for personal, non-commercial use only. By using this service, you agree to:</p>
     <ul>
-        <li>Physical training involves risk of injury</li>
-        <li>Stop immediately if you experience pain</li>
-        <li>Individual results may vary</li>
-        <li>We are not responsible for injuries sustained while following our programs</li>
+      <li>Use the service only for lawful purposes</li>
+      <li>Not attempt to reverse engineer, scrape, or automate requests to EatMe</li>
+      <li>Not use the service in any way that could damage, disable, or impair its functionality</li>
+      <li>Not misrepresent your identity or use the service on behalf of another person without authorization</li>
     </ul>
-    
-    <h2>3. Service Description</h2>
-    <p>VeloCoreLab provides baseball pitching training programs, educational content, and tools. We reserve the right to modify, suspend, or discontinue any part of the Service at any time.</p>
-    
-    <h2>4. Subscription & Payment</h2>
-    <h3>Free Trial:</h3>
-    <ul>
-        <li>7-day free trial available for new members</li>
-        <li>Cancel anytime before trial ends to avoid charges</li>
-        <li>Automatic conversion to paid membership after trial</li>
-    </ul>
-    
-    <h3>Paid Membership:</h3>
-    <ul>
-        <li>Monthly: $15/month, billed monthly</li>
-        <li>Annual: $100/year, billed annually</li>
-        <li>Auto-renewal unless cancelled</li>
-        <li>All payments processed through Stripe</li>
-    </ul>
-    
-    <h2>5. Refund Policy</h2>
-    <p>Refunds available within 30 days of initial payment if:</p>
-    <ul>
-        <li>You have not accessed the training programs</li>
-        <li>Technical issues prevented access (we'll try to fix first)</li>
-        <li>You contact us at <a href="/cdn-cgi/l/email-protection#dcabb5b0b09caab9b0b3bfb3aeb9b0bdbef2bfb3b1" class="__cf_email__" data-cfemail="45322c2929053320292a262a37202924276b262a28">[email&#160;protected]</a></li>
-    </ul>
-    <p>No refunds after 30 days or if programs have been accessed.</p>
-    
-    <h2>6. Cancellation</h2>
-    <p>You may cancel your subscription at any time through your Stripe billing portal. Cancellation is effective at the end of your current billing period. No partial refunds for unused time.</p>
-    
-    <h2>7. User Conduct</h2>
-    <p>You agree NOT to:</p>
-    <ul>
-        <li>Share your login credentials</li>
-        <li>Reproduce, distribute, or sell our content</li>
-        <li>Reverse engineer or copy our programs</li>
-        <li>Use the Service for any illegal purpose</li>
-        <li>Impersonate others or provide false information</li>
-    </ul>
-    
-    <h2>8. Intellectual Property</h2>
-    <p>All content, programs, designs, and materials on VeloCoreLab are owned by us and protected by copyright laws. You may not copy, reproduce, or distribute our content without written permission.</p>
-    
-    <h3>License:</h3>
-    <p>We grant you a limited, non-exclusive, non-transferable license to access and use the training programs for your personal use only.</p>
-    
-    <h2>9. No Affiliation</h2>
-    <p>VeloCoreLab is <strong>NOT</strong> affiliated with, endorsed by, or connected to:</p>
-    <ul>
-        <li>Any universities or collegiate athletic programs</li>
-        <li>Any professional sports organizations</li>
-        <li>Any sports medicine institutes or research organizations</li>
-        <li>Any equipment manufacturers or training companies</li>
-    </ul>
-    <p>Any references to research or training methodologies are for educational purposes only.</p>
-    
-    <h2>10. Age Restrictions</h2>
-    <p>You must be at least 13 years old to use this Service. Users under 18 require parental consent.</p>
-    
-    <h2>11. Limitation of Liability</h2>
-    <p><strong>TO THE MAXIMUM EXTENT PERMITTED BY LAW:</strong></p>
-    <ul>
-        <li>VeloCoreLab is provided "AS IS" without warranties</li>
-        <li>We are not liable for injuries, damages, or losses</li>
-        <li>Our total liability is limited to the amount you paid in the last 12 months</li>
-        <li>We are not responsible for third-party content or links</li>
-    </ul>
-    
-    <h2>12. Indemnification</h2>
-    <p>You agree to indemnify and hold VeloCoreLab harmless from any claims, damages, or expenses arising from your use of the Service or violation of these Terms.</p>
-    
-    <h2>13. Privacy</h2>
-    <p>Your privacy is important. See our <a href="privacy.html">Privacy Policy</a> for how we collect and use your information.</p>
-    
-    <h2>14. Changes to Terms</h2>
-    <p>We may update these Terms at any time. Continued use of the Service after changes constitutes acceptance of new Terms. We will notify users of material changes via email.</p>
-    
-    <h2>15. Governing Law</h2>
-    <p>These Terms are governed by the laws of the United States. Any disputes will be resolved in courts located in [Your State/County].</p>
-    
-    <h2>16. Contact</h2>
-    <p>Questions about these Terms? Email
+
+    <h2>3. Accuracy of Pricing Information</h2>
+    <p>EatMe retrieves pricing data in real time from third-party platforms. While we strive to display accurate and up-to-date information, we cannot guarantee that prices, fees, availability, or menu items are current or complete at the time of display. Prices shown are for informational purposes only. Final pricing is determined by the delivery platform at the time of checkout.</p>
+    <p>EatMe is not responsible for discrepancies between prices shown on our site and prices charged by delivery platforms.</p>
+
+    <h2>4. Intellectual Property</h2>
+    <p>The EatMe name, logo, and original content on this site are the property of Programmatic Partners. Pricing data, restaurant names, menu items, and related content are the property of their respective platforms and restaurants. EatMe does not claim ownership over any third-party data displayed through the service.</p>
+
+    <h2>5. Disclaimers</h2>
+    <p>THE SERVICE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND. EATME MAKES NO WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR NON-INFRINGEMENT.</p>
+    <p>We do not warrant that the service will be uninterrupted, error-free, or free of viruses or other harmful components.</p>
+
+    <h2>6. Limitation of Liability</h2>
+    <p>TO THE FULLEST EXTENT PERMITTED BY LAW, EATME AND ITS OPERATORS SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING FROM YOUR USE OF OR INABILITY TO USE THE SERVICE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.</p>
+
+    <h2>7. Third-Party Platforms</h2>
+    <p>EatMe links to and retrieves data from third-party delivery platforms. Your interactions with those platforms — including placing orders — are governed entirely by their own terms of service and privacy policies. EatMe has no control over, and assumes no responsibility for, the content, policies, or practices of any third-party platform.</p>
+
+    <h2>8. Modifications to the Service</h2>
+    <p>We reserve the right to modify, suspend, or discontinue EatMe at any time without notice. We may also update these Terms of Service at any time. Continued use of the service after changes are posted constitutes your acceptance of the revised terms.</p>
+
+    <h2>9. Governing Law</h2>
+    <p>These Terms shall be governed by and construed in accordance with the laws of the State of New Jersey, without regard to its conflict of law provisions.</p>
+
+    <h2>10. Contact</h2>
+    <p>If you have questions about these Terms, please contact us via our <a href="/contact">Contact page</a>.</p>
+
+    <hr class="divider" />
+    <p style="font-size: 14px; color: #6b6b8a;">EatMe is an independent price comparison tool and is not affiliated with DoorDash, Grubhub, Seamless, or Uber Eats.</p>
+  </main>
+
+  <footer>
+    <span class="footer-copy">© 2026 <strong>EatMe</strong> — Built by Programmatic Partners</span>
+    <nav class="footer-links">
+      <a href="/privacy">Privacy Policy</a>
+      <a href="/terms">Terms of Service</a>
+      <a href="/contact">Contact</a>
+    </nav>
+  </footer>
+</body>
+</html>
