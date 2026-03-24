@@ -168,7 +168,7 @@ app.post('/api/search', async (req, res) => {
   // -------------------------------------------------------------------------
   // Phase 3: assemble response from cached + fresh results
   // -------------------------------------------------------------------------
-  const allRawResults = platforms.map(p => cachedResults[p] || freshResults[p] || []);
+  const allRawResults = platforms.map(p => (cachedResults[p] || freshResults[p] || []).filter(r => !r._tooFar));
 
   // Calculate distance for any result that has store coords but no distance yet
   if (resolvedLat && resolvedLng) {
@@ -176,6 +176,7 @@ app.post('/api/search', async (req, res) => {
       if (!result) continue;
       if (!result.distance && result.storeLat && result.storeLng) {
         const dist = haversine(resolvedLat, resolvedLng, result.storeLat, result.storeLng);
+        if (dist > 15) { result._tooFar = true; continue; }
         result.distance = dist + ' mi';
       }
     }
@@ -355,7 +356,9 @@ app.get('/api/search/stream', async (req, res) => {
     for (const result of allRawResults.flat()) {
       if (!result) continue;
       if (!result.distance && result.storeLat && result.storeLng) {
-        result.distance = haversine(resolvedLat, resolvedLng, result.storeLat, result.storeLng) + ' mi';
+        const dist = haversine(resolvedLat, resolvedLng, result.storeLat, result.storeLng);
+        if (dist > 15) { result._tooFar = true; continue; }
+        result.distance = dist + ' mi';
       }
     }
   }
@@ -399,31 +402,6 @@ app.get('/api/search/stream', async (req, res) => {
 
   send('complete', { dish, address, rankBy, elapsedSeconds: parseFloat(elapsed), summary, results: ranked });
   res.end();
-});
-
-// ---------------------------------------------------------------------------
-// Static pages
-// ---------------------------------------------------------------------------
-app.get('/privacy', (req, res) => {
-  res.sendFile(path.join(__dirname, '../client/privacy.html'));
-});
-app.get('/terms', (req, res) => {
-  res.sendFile(path.join(__dirname, '../client/terms.html'));
-});
-app.get('/contact', (req, res) => {
-  res.sendFile(path.join(__dirname, '../client/contact.html'));
-});
-
-// ---------------------------------------------------------------------------
-// Contact form endpoint
-// ---------------------------------------------------------------------------
-app.post('/api/contact', async (req, res) => {
-  const { name, email, subject, message } = req.body;
-  if (!name || !email || !message) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-  console.log(`[CONTACT] From: ${name} <${email}> | Subject: ${subject || 'n/a'} | Message: ${message}`);
-  res.json({ success: true });
 });
 
 // ---------------------------------------------------------------------------
