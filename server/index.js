@@ -241,7 +241,15 @@ app.post('/api/search', async (req, res) => {
     }
   }
 
-  const { ranked, summary } = aggregate(allRawResults, rankBy);
+  // Filter out results beyond 15 miles based on distance string
+  const filteredResults = allRawResults.map(arr =>
+    arr.filter(r => {
+      if (!r || !r.distance) return true;
+      const miles = parseFloat(r.distance);
+      return isNaN(miles) || miles <= 15;
+    })
+  );
+  const { ranked, summary } = aggregate(filteredResults, rankBy);
 
   res.json({
     dish,
@@ -398,7 +406,15 @@ app.get('/api/search/stream', async (req, res) => {
   }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-  const { ranked, summary } = aggregate(allRawResults, rankBy);
+  // Filter out results beyond 15 miles based on distance string
+  const filteredResults = allRawResults.map(arr =>
+    arr.filter(r => {
+      if (!r || !r.distance) return true;
+      const miles = parseFloat(r.distance);
+      return isNaN(miles) || miles <= 15;
+    })
+  );
+  const { ranked, summary } = aggregate(filteredResults, rankBy);
 
   send('complete', { dish, address, rankBy, elapsedSeconds: parseFloat(elapsed), summary, results: ranked });
   res.end();
