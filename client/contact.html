@@ -1,302 +1,245 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Contact — EatMe</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: #0f0f17;
-      color: #e2e2f0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 16px;
-      line-height: 1.7;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-    header {
-      background: #13131f;
-      border-bottom: 1px solid #2a2a3d;
-      padding: 18px 32px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    header a {
-      text-decoration: none;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .logo-icon {
-      width: 32px; height: 32px;
-      background: linear-gradient(135deg, #7c3aed, #4f46e5);
-      border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 18px;
-    }
-    .logo-text {
-      font-size: 20px;
-      font-weight: 700;
-      color: #fff;
-      letter-spacing: -0.3px;
-    }
-    main {
-      flex: 1;
-      max-width: 640px;
-      margin: 60px auto;
-      padding: 0 24px 60px;
-      width: 100%;
-    }
-    .page-label {
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      color: #7c3aed;
-      margin-bottom: 12px;
-    }
-    h1 {
-      font-size: 36px;
-      font-weight: 800;
-      color: #fff;
-      margin-bottom: 12px;
-      letter-spacing: -0.5px;
-    }
-    .subtitle {
-      color: #6b6b8a;
-      font-size: 16px;
-      margin-bottom: 48px;
-    }
-    .contact-card {
-      background: #13131f;
-      border: 1px solid #2a2a3d;
-      border-radius: 12px;
-      padding: 32px;
-      margin-bottom: 24px;
-    }
-    .contact-card h2 {
-      font-size: 16px;
-      font-weight: 700;
-      color: #fff;
-      margin-bottom: 8px;
-    }
-    .contact-card p {
-      color: #6b6b8a;
-      font-size: 14px;
-      margin-bottom: 16px;
-    }
-    .form-group {
-      margin-bottom: 20px;
-    }
-    label {
-      display: block;
-      font-size: 13px;
-      font-weight: 600;
-      color: #a0a0c0;
-      margin-bottom: 6px;
-    }
-    input, textarea, select {
-      width: 100%;
-      background: #0f0f17;
-      border: 1px solid #2a2a3d;
-      border-radius: 8px;
-      padding: 10px 14px;
-      font-size: 15px;
-      color: #e2e2f0;
-      font-family: inherit;
-      transition: border-color 0.2s;
-      outline: none;
-    }
-    input:focus, textarea:focus, select:focus {
-      border-color: #7c3aed;
-    }
-    input::placeholder, textarea::placeholder {
-      color: #4a4a6a;
-    }
-    textarea {
-      resize: vertical;
-      min-height: 120px;
-    }
-    select option { background: #13131f; }
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: linear-gradient(135deg, #7c3aed, #4f46e5);
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      padding: 12px 24px;
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.2s;
-      width: 100%;
-      justify-content: center;
-    }
-    .btn:hover { opacity: 0.9; }
-    .success-msg {
-      display: none;
-      background: #0d2a1a;
-      border: 1px solid #1a5c35;
-      border-radius: 8px;
-      padding: 14px 18px;
-      color: #4ade80;
-      font-size: 14px;
-      margin-top: 16px;
-    }
-    .alt-contact {
-      background: #13131f;
-      border: 1px solid #2a2a3d;
-      border-radius: 12px;
-      padding: 24px 32px;
-    }
-    .alt-contact h2 {
-      font-size: 15px;
-      font-weight: 700;
-      color: #fff;
-      margin-bottom: 16px;
-    }
-    .contact-row {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 0;
-      border-bottom: 1px solid #1e1e2e;
-    }
-    .contact-row:last-child { border-bottom: none; }
-    .contact-icon {
-      width: 36px; height: 36px;
-      background: #1e1e2e;
-      border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 16px;
-      flex-shrink: 0;
-    }
-    .contact-info { flex: 1; }
-    .contact-info strong {
-      display: block;
-      font-size: 13px;
-      font-weight: 600;
-      color: #a0a0c0;
-    }
-    .contact-info span {
-      font-size: 13px;
-      color: #6b6b8a;
-    }
-    a { color: #7c3aed; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    footer {
-      background: #13131f;
-      border-top: 1px solid #2a2a3d;
-      padding: 28px 32px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
-    .footer-copy { font-size: 13px; color: #6b6b8a; }
-    .footer-copy strong { color: #a0a0c0; }
-    .footer-links { display: flex; gap: 24px; }
-    .footer-links a { font-size: 13px; color: #6b6b8a; }
-    .footer-links a:hover { color: #a0a0c0; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contact — EatMe</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ff4500'/%3E%3Cline x1='22' y1='12' x2='22' y2='28' stroke='white' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='32' y1='12' x2='32' y2='28' stroke='white' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='42' y1='12' x2='42' y2='28' stroke='white' stroke-width='2.5' stroke-linecap='round'/%3E%3Cpath d='M22 28 Q22 37 32 40 Q42 37 42 28' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cline x1='32' y1='40' x2='32' y2='53' stroke='white' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --white: #ffffff;
+  --off-white: #faf9f7;
+  --border: #e8e4df;
+  --border-dark: #d4cfc8;
+  --text: #1a1714;
+  --text-secondary: #6b6560;
+  --text-muted: #a09a93;
+  --accent: #ff4500;
+  --accent-light: #fff2ee;
+  --accent-hover: #e63d00;
+  --green: #00a651;
+  --green-light: #e8f7ee;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.08);
+  --radius: 16px;
+  --radius-sm: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--off-white); color: var(--text); font-family: 'Plus Jakarta Sans', sans-serif; min-height: 100vh; display: flex; flex-direction: column; -webkit-font-smoothing: antialiased; }
+.nav { background: var(--white); border-bottom: 1px solid var(--border); padding: 16px 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+.nav-inner { max-width: 960px; margin: 0 auto; }
+.nav a { text-decoration: none; }
+.page-hero { background: var(--white); border-bottom: 1px solid var(--border); padding: 48px 24px 40px; }
+.page-hero-inner { max-width: 640px; margin: 0 auto; }
+.page-label { display: inline-flex; align-items: center; background: var(--accent-light); color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 5px 12px; border-radius: 20px; margin-bottom: 16px; }
+h1 { font-family: 'Playfair Display', serif; font-size: clamp(28px, 4vw, 42px); font-weight: 900; line-height: 1.1; letter-spacing: -.02em; margin-bottom: 8px; }
+.subtitle { font-size: 15px; color: var(--text-secondary); line-height: 1.65; }
+main { flex: 1; max-width: 640px; margin: 0 auto; padding: 40px 24px 80px; width: 100%; }
+
+.card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; margin-bottom: 16px; box-shadow: var(--shadow-sm); }
+.card h2 { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+.card-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+
+.form-group { margin-bottom: 16px; }
+label { display: block; font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 5px; }
+input, textarea, select {
+  width: 100%;
+  background: var(--off-white);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  outline: none;
+  transition: all .15s;
+}
+input:focus, textarea:focus, select:focus {
+  border-color: var(--accent);
+  background: var(--white);
+  box-shadow: 0 0 0 3px rgba(255,69,0,.08);
+}
+input::placeholder, textarea::placeholder { color: var(--text-muted); font-weight: 400; }
+textarea { resize: vertical; min-height: 120px; }
+select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23a09a93' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+
+.submit-btn {
+  width: 100%;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: white;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 12px 24px;
+  cursor: pointer;
+  transition: all .15s;
+  box-shadow: 0 3px 10px rgba(255,69,0,.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.submit-btn:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 5px 16px rgba(255,69,0,.35); }
+
+.success-msg {
+  display: none;
+  background: var(--green-light);
+  border: 1px solid #86efac;
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 14px;
+  align-items: center;
+  gap: 8px;
+}
+
+.alt-card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px 28px; box-shadow: var(--shadow-sm); }
+.alt-card h2 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted); margin-bottom: 16px; }
+.contact-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.contact-row:last-child { border-bottom: none; padding-bottom: 0; }
+.contact-icon { width: 36px; height: 36px; background: var(--off-white); border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+.contact-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin-bottom: 2px; }
+.contact-value { font-size: 14px; font-weight: 600; color: var(--text); }
+a { color: var(--accent); text-decoration: none; font-weight: 600; }
+a:hover { text-decoration: underline; }
+
+footer { border-top: 1px solid var(--border); background: var(--white); }
+.footer-inner { max-width: 960px; margin: 0 auto; padding: 32px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+.footer-copy { font-size: 13px; color: var(--text-secondary); }
+.footer-nav { display: flex; gap: 20px; flex-wrap: wrap; }
+.footer-nav a { font-size: 13px; color: var(--text-muted); text-decoration: none; font-weight: 500; }
+.footer-nav a:hover { color: var(--accent); }
+</style>
 </head>
 <body>
-  <header>
-    <a href="/">
-      <div class="logo-icon">🍽️</div>
-      <span class="logo-text">EatMe</span>
-    </a>
-  </header>
 
-  <main>
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="/">
+      <svg width="110" height="34" viewBox="0 0 110 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <line x1="7" y1="2" x2="7" y2="11" stroke="#ff4500" stroke-width="2" stroke-linecap="round"/>
+        <line x1="13" y1="2" x2="13" y2="11" stroke="#ff4500" stroke-width="2" stroke-linecap="round"/>
+        <line x1="19" y1="2" x2="19" y2="11" stroke="#ff4500" stroke-width="2" stroke-linecap="round"/>
+        <path d="M7 11 Q7 17 13 19 Q19 17 19 11" fill="none" stroke="#ff4500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="13" y1="19" x2="13" y2="30" stroke="#ff4500" stroke-width="2" stroke-linecap="round"/>
+        <text font-family="'Playfair Display',Georgia,serif" font-size="26" font-weight="900" letter-spacing="-0.5" fill="#1a1714" x="26" y="29">Eat<tspan fill="#ff4500">Me</tspan></text>
+      </svg>
+    </a>
+  </div>
+</nav>
+
+<div class="page-hero">
+  <div class="page-hero-inner">
     <div class="page-label">Get in touch</div>
     <h1>Contact Us</h1>
     <p class="subtitle">Questions, feedback, or partnership inquiries — we'd love to hear from you.</p>
+  </div>
+</div>
 
-    <div class="contact-card">
-      <h2>Send us a message</h2>
-      <p>We typically respond within 1–2 business days.</p>
+<main>
+  <div class="card">
+    <h2>Send us a message</h2>
+    <p class="card-sub">We typically respond within 1–2 business days.</p>
+    <div class="form-group">
+      <label for="name">Your name</label>
+      <input type="text" id="name" placeholder="Jane Smith" />
+    </div>
+    <div class="form-group">
+      <label for="email">Email address</label>
+      <input type="email" id="email" placeholder="jane@example.com" />
+    </div>
+    <div class="form-group">
+      <label for="subject">Subject</label>
+      <select id="subject">
+        <option value="">Select a topic...</option>
+        <option value="general">General question</option>
+        <option value="bug">Bug report</option>
+        <option value="feature">Feature request</option>
+        <option value="partnership">Partnership / business inquiry</option>
+        <option value="press">Press inquiry</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="message">Message</label>
+      <textarea id="message" placeholder="Tell us what's on your mind..."></textarea>
+    </div>
+    <button class="submit-btn" onclick="handleSubmit()">
+      Send message
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    </button>
+    <div class="success-msg" id="successMsg">
+      ✓ Message sent! We'll get back to you within 1–2 business days.
+    </div>
+  </div>
 
-      <div class="form-group">
-        <label for="name">Your name</label>
-        <input type="text" id="name" placeholder="Jane Smith" />
-      </div>
-      <div class="form-group">
-        <label for="email">Email address</label>
-        <input type="email" id="email" placeholder="jane@example.com" />
-      </div>
-      <div class="form-group">
-        <label for="subject">Subject</label>
-        <select id="subject">
-          <option value="">Select a topic...</option>
-          <option value="general">General question</option>
-          <option value="bug">Bug report</option>
-          <option value="feature">Feature request</option>
-          <option value="partnership">Partnership / business inquiry</option>
-          <option value="press">Press inquiry</option>
-          <option value="other">Other</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="message">Message</label>
-        <textarea id="message" placeholder="Tell us what's on your mind..."></textarea>
-      </div>
-      <button class="btn" onclick="handleSubmit()">Send message →</button>
-      <div class="success-msg" id="successMsg">
-        ✓ Message sent! We'll get back to you within 1–2 business days.
+  <div class="alt-card">
+    <h2>Other ways to reach us</h2>
+    <div class="contact-row">
+      <div class="contact-icon">✉️</div>
+      <div>
+        <div class="contact-label">Email</div>
+        <div class="contact-value"><a href="mailto:hello@eatme.tech">hello@eatme.tech</a></div>
       </div>
     </div>
-
-    <div class="alt-contact">
-      <h2>Other ways to reach us</h2>
-      <div class="contact-row">
-        <div class="contact-icon">✉️</div>
-        <div class="contact-info">
-          <strong>Email</strong>
-          <span><a href="mailto:hello@eatme.tech">hello@eatme.tech</a></span>
-        </div>
-      </div>
-      <div class="contact-row">
-        <div class="contact-icon">🏢</div>
-        <div class="contact-info">
-          <strong>Built by</strong>
-          <span>Programmatic Partners</span>
-        </div>
+    <div class="contact-row">
+      <div class="contact-icon">🏢</div>
+      <div>
+        <div class="contact-label">Built by</div>
+        <div class="contact-value">Programmatic Partners</div>
       </div>
     </div>
-  </main>
+  </div>
+</main>
 
-  <footer>
+<footer>
+  <div class="footer-inner">
     <span class="footer-copy">© 2026 <strong>EatMe</strong> — Built by Programmatic Partners</span>
-    <nav class="footer-links">
+    <nav class="footer-nav">
       <a href="/privacy">Privacy Policy</a>
       <a href="/terms">Terms of Service</a>
       <a href="/contact">Contact</a>
     </nav>
-  </footer>
+  </div>
+</footer>
 
-  <script>
-    function handleSubmit() {
-      const name = document.getElementById('name').value.trim();
-      const email = document.getElementById('email').value.trim();
-      const message = document.getElementById('message').value.trim();
-      if (!name || !email || !message) {
-        alert('Please fill in your name, email, and message.');
-        return;
-      }
-      // Replace this with your actual form submission endpoint
-      document.getElementById('successMsg').style.display = 'block';
+<script>
+async function handleSubmit() {
+  const name = document.getElementById('name').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const subject = document.getElementById('subject').value;
+  const message = document.getElementById('message').value.trim();
+  if (!name || !email || !message) {
+    alert('Please fill in your name, email, and message.');
+    return;
+  }
+  try {
+    const res = await fetch('/api/contact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, subject, message })
+    });
+    if (res.ok) {
+      const msg = document.getElementById('successMsg');
+      msg.style.display = 'flex';
       document.getElementById('name').value = '';
       document.getElementById('email').value = '';
       document.getElementById('subject').value = '';
       document.getElementById('message').value = '';
     }
-  </script>
+  } catch(e) {
+    alert('Something went wrong. Please try again.');
+  }
+}
+</script>
+
 </body>
 </html>

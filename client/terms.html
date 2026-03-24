@@ -1,185 +1,132 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Terms of Service — EatMe</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: #0f0f17;
-      color: #e2e2f0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 16px;
-      line-height: 1.7;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-    header {
-      background: #13131f;
-      border-bottom: 1px solid #2a2a3d;
-      padding: 18px 32px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    header a {
-      text-decoration: none;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .logo-icon {
-      width: 32px; height: 32px;
-      background: linear-gradient(135deg, #7c3aed, #4f46e5);
-      border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 18px;
-    }
-    .logo-text {
-      font-size: 20px;
-      font-weight: 700;
-      color: #fff;
-      letter-spacing: -0.3px;
-    }
-    main {
-      flex: 1;
-      max-width: 760px;
-      margin: 60px auto;
-      padding: 0 24px 60px;
-      width: 100%;
-    }
-    .page-label {
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      color: #7c3aed;
-      margin-bottom: 12px;
-    }
-    h1 {
-      font-size: 36px;
-      font-weight: 800;
-      color: #fff;
-      margin-bottom: 8px;
-      letter-spacing: -0.5px;
-    }
-    .last-updated {
-      font-size: 14px;
-      color: #6b6b8a;
-      margin-bottom: 48px;
-    }
-    h2 {
-      font-size: 18px;
-      font-weight: 700;
-      color: #fff;
-      margin: 40px 0 12px;
-    }
-    p { color: #a0a0c0; margin-bottom: 16px; }
-    ul {
-      color: #a0a0c0;
-      padding-left: 20px;
-      margin-bottom: 16px;
-    }
-    ul li { margin-bottom: 8px; }
-    a { color: #7c3aed; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .divider {
-      border: none;
-      border-top: 1px solid #2a2a3d;
-      margin: 40px 0;
-    }
-    footer {
-      background: #13131f;
-      border-top: 1px solid #2a2a3d;
-      padding: 28px 32px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
-    .footer-copy {
-      font-size: 13px;
-      color: #6b6b8a;
-    }
-    .footer-copy strong { color: #a0a0c0; }
-    .footer-links {
-      display: flex;
-      gap: 24px;
-    }
-    .footer-links a {
-      font-size: 13px;
-      color: #6b6b8a;
-    }
-    .footer-links a:hover { color: #a0a0c0; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terms of Service — EatMe</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ff4500'/%3E%3Cline x1='22' y1='12' x2='22' y2='28' stroke='white' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='32' y1='12' x2='32' y2='28' stroke='white' stroke-width='2.5' stroke-linecap='round'/%3E%3Cline x1='42' y1='12' x2='42' y2='28' stroke='white' stroke-width='2.5' stroke-linecap='round'/%3E%3Cpath d='M22 28 Q22 37 32 40 Q42 37 42 28' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cline x1='32' y1='40' x2='32' y2='53' stroke='white' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --white: #ffffff;
+  --off-white: #faf9f7;
+  --border: #e8e4df;
+  --text: #1a1714;
+  --text-secondary: #6b6560;
+  --text-muted: #a09a93;
+  --accent: #ff4500;
+  --accent-light: #fff2ee;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--off-white); color: var(--text); font-family: 'Plus Jakarta Sans', sans-serif; min-height: 100vh; display: flex; flex-direction: column; -webkit-font-smoothing: antialiased; }
+.nav { background: var(--white); border-bottom: 1px solid var(--border); padding: 16px 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+.nav-inner { max-width: 960px; margin: 0 auto; }
+.nav a { text-decoration: none; }
+.page-hero { background: var(--white); border-bottom: 1px solid var(--border); padding: 48px 24px 40px; }
+.page-hero-inner { max-width: 760px; margin: 0 auto; }
+.page-label { display: inline-flex; align-items: center; background: var(--accent-light); color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 5px 12px; border-radius: 20px; margin-bottom: 16px; }
+h1 { font-family: 'Playfair Display', serif; font-size: clamp(28px, 4vw, 42px); font-weight: 900; line-height: 1.1; letter-spacing: -.02em; margin-bottom: 8px; }
+.last-updated { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+main { flex: 1; max-width: 760px; margin: 0 auto; padding: 40px 24px 80px; width: 100%; }
+h2 { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; color: var(--text); margin: 36px 0 10px; }
+p { font-size: 15px; color: var(--text-secondary); line-height: 1.75; margin-bottom: 14px; }
+ul { padding-left: 20px; margin-bottom: 14px; }
+ul li { font-size: 15px; color: var(--text-secondary); line-height: 1.75; margin-bottom: 6px; }
+strong { color: var(--text); font-weight: 700; }
+a { color: var(--accent); text-decoration: none; font-weight: 600; }
+a:hover { text-decoration: underline; }
+.divider { border: none; border-top: 1px solid var(--border); margin: 36px 0; }
+.legal-note { font-size: 12px; color: var(--text-muted); font-style: italic; }
+footer { border-top: 1px solid var(--border); background: var(--white); }
+.footer-inner { max-width: 960px; margin: 0 auto; padding: 32px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+.footer-copy { font-size: 13px; color: var(--text-secondary); }
+.footer-nav { display: flex; gap: 20px; flex-wrap: wrap; }
+.footer-nav a { font-size: 13px; color: var(--text-muted); text-decoration: none; font-weight: 500; }
+.footer-nav a:hover { color: var(--accent); }
+</style>
 </head>
 <body>
-  <header>
-    <a href="/">
-      <div class="logo-icon">🍽️</div>
-      <span class="logo-text">EatMe</span>
-    </a>
-  </header>
 
-  <main>
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="/">
+      <svg width="110" height="34" viewBox="0 0 110 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <line x1="7" y1="2" x2="7" y2="11" stroke="#ff4500" stroke-width="2" stroke-linecap="round"/>
+        <line x1="13" y1="2" x2="13" y2="11" stroke="#ff4500" stroke-width="2" stroke-linecap="round"/>
+        <line x1="19" y1="2" x2="19" y2="11" stroke="#ff4500" stroke-width="2" stroke-linecap="round"/>
+        <path d="M7 11 Q7 17 13 19 Q19 17 19 11" fill="none" stroke="#ff4500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="13" y1="19" x2="13" y2="30" stroke="#ff4500" stroke-width="2" stroke-linecap="round"/>
+        <text font-family="'Playfair Display',Georgia,serif" font-size="26" font-weight="900" letter-spacing="-0.5" fill="#1a1714" x="26" y="29">Eat<tspan fill="#ff4500">Me</tspan></text>
+      </svg>
+    </a>
+  </div>
+</nav>
+
+<div class="page-hero">
+  <div class="page-hero-inner">
     <div class="page-label">Legal</div>
     <h1>Terms of Service</h1>
     <p class="last-updated">Last updated: March 23, 2026</p>
+  </div>
+</div>
 
-    <p>Welcome to EatMe. By accessing or using our service at <a href="https://www.eatme.tech">www.eatme.tech</a>, you agree to be bound by these Terms of Service. Please read them carefully.</p>
+<main>
+  <p>Welcome to EatMe. By accessing or using our service at <a href="https://www.eatme.tech">www.eatme.tech</a>, you agree to be bound by these Terms of Service. Please read them carefully.</p>
 
-    <h2>1. About EatMe</h2>
-    <p>EatMe is an independent food delivery price comparison tool. We retrieve publicly available pricing information from third-party food delivery platforms — including DoorDash, Grubhub, Seamless, and Uber Eats — and display it side-by-side to help users make informed ordering decisions. EatMe is not affiliated with, endorsed by, or partnered with any of these platforms.</p>
+  <h2>1. About EatMe</h2>
+  <p>EatMe is an independent food delivery price comparison tool. We retrieve publicly available pricing information from third-party food delivery platforms — including DoorDash, Grubhub, Seamless, and Uber Eats — and display it side-by-side to help users make informed ordering decisions. EatMe is not affiliated with, endorsed by, or partnered with any of these platforms.</p>
 
-    <h2>2. Use of the Service</h2>
-    <p>EatMe is provided for personal, non-commercial use only. By using this service, you agree to:</p>
-    <ul>
-      <li>Use the service only for lawful purposes</li>
-      <li>Not attempt to reverse engineer, scrape, or automate requests to EatMe</li>
-      <li>Not use the service in any way that could damage, disable, or impair its functionality</li>
-      <li>Not misrepresent your identity or use the service on behalf of another person without authorization</li>
-    </ul>
+  <h2>2. Use of the Service</h2>
+  <p>EatMe is provided for personal, non-commercial use only. By using this service, you agree to:</p>
+  <ul>
+    <li>Use the service only for lawful purposes</li>
+    <li>Not attempt to reverse engineer, scrape, or automate requests to EatMe</li>
+    <li>Not use the service in any way that could damage, disable, or impair its functionality</li>
+    <li>Not misrepresent your identity or use the service on behalf of another person without authorization</li>
+  </ul>
 
-    <h2>3. Accuracy of Pricing Information</h2>
-    <p>EatMe retrieves pricing data in real time from third-party platforms. While we strive to display accurate and up-to-date information, we cannot guarantee that prices, fees, availability, or menu items are current or complete at the time of display. Prices shown are for informational purposes only. Final pricing is determined by the delivery platform at the time of checkout.</p>
-    <p>EatMe is not responsible for discrepancies between prices shown on our site and prices charged by delivery platforms.</p>
+  <h2>3. Accuracy of Pricing Information</h2>
+  <p>EatMe retrieves pricing data in real time from third-party platforms. While we strive to display accurate and up-to-date information, we cannot guarantee that prices, fees, availability, or menu items are current or complete at the time of display. Prices shown are for informational purposes only. Final pricing is determined by the delivery platform at the time of checkout.</p>
+  <p>EatMe is not responsible for discrepancies between prices shown on our site and prices charged by delivery platforms.</p>
 
-    <h2>4. Intellectual Property</h2>
-    <p>The EatMe name, logo, and original content on this site are the property of Programmatic Partners. Pricing data, restaurant names, menu items, and related content are the property of their respective platforms and restaurants. EatMe does not claim ownership over any third-party data displayed through the service.</p>
+  <h2>4. Intellectual Property</h2>
+  <p>The EatMe name, logo, and original content on this site are the property of Programmatic Partners. Pricing data, restaurant names, menu items, and related content are the property of their respective platforms and restaurants. EatMe does not claim ownership over any third-party data displayed through the service.</p>
 
-    <h2>5. Disclaimers</h2>
-    <p>THE SERVICE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND. EATME MAKES NO WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR NON-INFRINGEMENT.</p>
-    <p>We do not warrant that the service will be uninterrupted, error-free, or free of viruses or other harmful components.</p>
+  <h2>5. Disclaimers</h2>
+  <p>THE SERVICE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND. EATME MAKES NO WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR NON-INFRINGEMENT.</p>
+  <p>We do not warrant that the service will be uninterrupted, error-free, or free of viruses or other harmful components.</p>
 
-    <h2>6. Limitation of Liability</h2>
-    <p>TO THE FULLEST EXTENT PERMITTED BY LAW, EATME AND ITS OPERATORS SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING FROM YOUR USE OF OR INABILITY TO USE THE SERVICE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.</p>
+  <h2>6. Limitation of Liability</h2>
+  <p>TO THE FULLEST EXTENT PERMITTED BY LAW, EATME AND ITS OPERATORS SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING FROM YOUR USE OF OR INABILITY TO USE THE SERVICE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.</p>
 
-    <h2>7. Third-Party Platforms</h2>
-    <p>EatMe links to and retrieves data from third-party delivery platforms. Your interactions with those platforms — including placing orders — are governed entirely by their own terms of service and privacy policies. EatMe has no control over, and assumes no responsibility for, the content, policies, or practices of any third-party platform.</p>
+  <h2>7. Third-Party Platforms</h2>
+  <p>EatMe links to and retrieves data from third-party delivery platforms. Your interactions with those platforms — including placing orders — are governed entirely by their own terms of service and privacy policies. EatMe has no control over, and assumes no responsibility for, the content, policies, or practices of any third-party platform.</p>
 
-    <h2>8. Modifications to the Service</h2>
-    <p>We reserve the right to modify, suspend, or discontinue EatMe at any time without notice. We may also update these Terms of Service at any time. Continued use of the service after changes are posted constitutes your acceptance of the revised terms.</p>
+  <h2>8. Modifications to the Service</h2>
+  <p>We reserve the right to modify, suspend, or discontinue EatMe at any time without notice. We may also update these Terms of Service at any time. Continued use of the service after changes are posted constitutes your acceptance of the revised terms.</p>
 
-    <h2>9. Governing Law</h2>
-    <p>These Terms shall be governed by and construed in accordance with the laws of the State of New Jersey, without regard to its conflict of law provisions.</p>
+  <h2>9. Governing Law</h2>
+  <p>These Terms shall be governed by and construed in accordance with the laws of the State of New Jersey, without regard to its conflict of law provisions.</p>
 
-    <h2>10. Contact</h2>
-    <p>If you have questions about these Terms, please contact us via our <a href="/contact">Contact page</a>.</p>
+  <h2>10. Contact</h2>
+  <p>If you have questions about these Terms, please contact us via our <a href="/contact">Contact page</a>.</p>
 
-    <hr class="divider" />
-    <p style="font-size: 14px; color: #6b6b8a;">EatMe is an independent price comparison tool and is not affiliated with DoorDash, Grubhub, Seamless, or Uber Eats.</p>
-  </main>
+  <hr class="divider">
+  <p class="legal-note">EatMe is an independent price comparison tool and is not affiliated with DoorDash, Grubhub, Seamless, or Uber Eats.</p>
+</main>
 
-  <footer>
+<footer>
+  <div class="footer-inner">
     <span class="footer-copy">© 2026 <strong>EatMe</strong> — Built by Programmatic Partners</span>
-    <nav class="footer-links">
+    <nav class="footer-nav">
       <a href="/privacy">Privacy Policy</a>
       <a href="/terms">Terms of Service</a>
       <a href="/contact">Contact</a>
     </nav>
-  </footer>
+  </div>
+</footer>
+
 </body>
 </html>
