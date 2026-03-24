@@ -402,6 +402,31 @@ app.get('/api/search/stream', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Static pages
+// ---------------------------------------------------------------------------
+app.get('/privacy', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/privacy.html'));
+});
+app.get('/terms', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/terms.html'));
+});
+app.get('/contact', (req, res) => {
+  res.sendFile(path.join(__dirname, '../client/contact.html'));
+});
+
+// ---------------------------------------------------------------------------
+// Contact form endpoint
+// ---------------------------------------------------------------------------
+app.post('/api/contact', async (req, res) => {
+  const { name, email, subject, message } = req.body;
+  if (!name || !email || !message) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+  console.log(`[CONTACT] From: ${name} <${email}> | Subject: ${subject || 'n/a'} | Message: ${message}`);
+  res.json({ success: true });
+});
+
+// ---------------------------------------------------------------------------
 // Static / fallback
 // ---------------------------------------------------------------------------
 app.get('*', (req, res) => {

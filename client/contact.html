@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact Us — Prebid Monitor</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%233b82f6'/%3E%3Cstop offset='100%25' stop-color='%2306b6d4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='36' height='36' rx='8' fill='url(%23g)'/%3E%3Ccircle cx='18' cy='18' r='6' fill='none' stroke='white' stroke-width='2.5'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-deep: #06080d;
+      --bg-card: #0c1018;
+      --bg-card-hover: #0f1420;
+      --border: rgba(255,255,255,0.06);
+      --border-bright: rgba(255,255,255,0.12);
+      --text-primary: #eaf0ff;
+      --text-secondary: #8896b3;
+      --text-muted: #4e5d7a;
+      --accent: #3b82f6;
+      --accent-bright: #60a5fa;
+      --accent-glow: rgba(59,130,246,0.15);
+      --green: #22c55e;
+      --red: #ef4444;
+      --cyan: #06b6d4;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      top: -200px; left: 50%; transform: translateX(-50%);
+      width: 800px; height: 800px;
+      background: radial-gradient(circle, rgba(59,130,246,0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .container {
+      max-width: 580px;
+      margin: 0 auto;
+      padding: 60px 24px 80px;
+      position: relative;
+      z-index: 1;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 48px;
+      text-decoration: none;
+    }
+    .logo-icon {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, var(--accent), var(--cyan));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .logo-icon::after {
+      content: '';
+      width: 14px; height: 14px;
+      border: 2.5px solid white;
+      border-radius: 50%;
+    }
+    .logo-text {
+      font-weight: 600; font-size: 22px;
+      color: var(--text-primary);
+      letter-spacing: -0.3px;
+    }
+    .logo-text span { color: var(--accent-bright); }
+
+    .page-title {
+      text-align: center;
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }
+    .page-subtitle {
+      text-align: center;
+      font-size: 16px;
+      color: var(--text-secondary);
+      margin-bottom: 40px;
+      line-height: 1.5;
+    }
+
+    .contact-form {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 36px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .form-group {
+      margin-bottom: 18px;
+    }
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+    .form-input, .form-select, .form-textarea {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1px solid var(--border-bright);
+      border-radius: 10px;
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      transition: all 0.2s;
+      outline: none;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .form-input::placeholder, .form-textarea::placeholder { color: var(--text-muted); }
+    .form-select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%234e5d7a' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      padding-right: 36px;
+      cursor: pointer;
+    }
+    .form-select option { background: var(--bg-deep); color: var(--text-primary); }
+    .form-textarea {
+      resize: vertical;
+      min-height: 120px;
+      line-height: 1.5;
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), #2563eb);
+      color: white;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.25s;
+      box-shadow: 0 2px 16px rgba(59,130,246,0.25);
+      margin-top: 8px;
+    }
+    .submit-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 24px rgba(59,130,246,0.35);
+    }
+    .submit-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .success-msg {
+      text-align: center;
+      padding: 40px 20px;
+      display: none;
+    }
+    .success-msg.show { display: block; }
+    .success-icon {
+      width: 56px; height: 56px;
+      background: rgba(34,197,94,0.1);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 20px;
+      font-size: 28px;
+      color: var(--green);
+    }
+    .success-msg h3 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .success-msg p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .error-msg {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.2);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: var(--red);
+      text-align: center;
+      display: none;
+    }
+    .error-msg.show { display: block; }
+
+    .back-link {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 13px;
+    }
+    .back-link a {
+      color: var(--accent-bright);
+      text-decoration: none;
+    }
+    .back-link a:hover { text-decoration: underline; }
+
+    @media (max-width: 520px) {
+      .form-row { grid-template-columns: 1fr; }
+      .container { padding: 40px 16px 60px; }
+      .page-title { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="/" class="logo">
+      <div class="logo-icon"></div>
+      <div class="logo-text">Prebid<span>Monitor</span></div>
+    </a>
+
+    <h1 class="page-title">Get in touch</h1>
+    <p class="page-subtitle">Have questions about Prebid Monitor? Want a demo or need a custom plan? We'd love to hear from you.</p>
+
+    <div class="contact-form">
+      <div class="error-msg" id="errorMsg"></div>
+
+      <div id="formFields">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="name">Name</label>
+            <input class="form-input" type="text" id="name" placeholder="Your name" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="email">Email</label>
+            <input class="form-input" type="email" id="email" placeholder="you@company.com" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="company">Company</label>
+            <input class="form-input" type="text" id="company" placeholder="Company name">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="topic">Topic</label>
+            <select class="form-select" id="topic">
+              <option value="" disabled selected>Select a topic</option>
+              <option value="Demo Request">Request a demo</option>
+              <option value="Pricing & Plans">Pricing & plans</option>
+              <option value="Custom Monitoring">Custom monitoring</option>
+              <option value="Partnership Inquiry">Partnership inquiry</option>
+              <option value="Technical Support">Technical support</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="message">Message</label>
+          <textarea class="form-textarea" id="message" placeholder="Tell us what you're looking for..." required></textarea>
+        </div>
+
+        <button class="submit-btn" id="submitBtn" onclick="handleSubmit()">Send Message</button>
+      </div>
+
+      <div class="success-msg" id="successMsg">
+        <div class="success-icon">✓</div>
+        <h3>Message sent!</h3>
+        <p>Thanks for reaching out. We'll get back to you within 24 hours.</p>
+      </div>
+    </div>
+
+    <div class="back-link"><a href="/">← Back to Prebid Monitor</a></div>
+  </div>
+
+  <script>
+    function showError(msg) {
+      const el = document.getElementById('errorMsg');
+      el.textContent = msg;
+      el.classList.add('show');
+    }
+
+    async function handleSubmit() {
+      const name = document.getElementById('name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const company = document.getElementById('company').value.trim();
+      const topic = document.getElementById('topic').value;
+      const message = document.getElementById('message').value.trim();
+      const btn = document.getElementById('submitBtn');
+
+      document.getElementById('errorMsg').classList.remove('show');
+
+      if (!name) return showError('Please enter your name');
+      if (!email || !email.includes('@')) return showError('Please enter a valid email');
+      if (!message) return showError('Please enter a message');
+
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+
+      try {
+        const res = await fetch('https://formspree.io/f/xzdazgak', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ name, email, company, topic, message })
+        });
+
+        if (res.ok) {
+          document.getElementById('formFields').style.display = 'none';
+          document.getElementById('errorMsg').classList.remove('show');
+          document.getElementById('successMsg').classList.add('show');
+        } else {
+          const data = await res.json();
+          showError(data.error || 'Something went wrong. Please try again.');
+          btn.disabled = false;
+          btn.textContent = 'Send Message';
+        }
+      } catch(e) {
+        showError('Network error. Please try again.');
+        btn.disabled = false;
+        btn.textContent = 'Send Message';
+      }
+    }
+
+    document.getElementById('message').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmit();
+    });
+  </script>
+</body>
+</html>
