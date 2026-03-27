@@ -91,8 +91,15 @@ function aggregate(allResults, rankBy = 'totalPrice') {
   const withRating = results.filter(r => r.rating != null).sort((a,b) => b.rating - a.rating);
   const withEta   = results.filter(r => r.eta != null).sort((a,b) => parseEta(a.eta) - parseEta(b.eta));
 
+  // Find same restaurant across multiple platforms
+  const restaurantMatches = findRestaurantMatches(results);
+  if (restaurantMatches.length > 0) {
+    console.log(`[Aggregator] Found ${restaurantMatches.length} cross-platform restaurant match(es)`);
+  }
+
   return {
     ranked,
+    restaurantMatches,
     summary: {
       totalResults: results.length,
       platforms: platformSummary,
@@ -104,6 +111,130 @@ function aggregate(allResults, rankBy = 'totalPrice') {
       }
     }
   };
+}
+
+/**
+ * Normalize a restaurant name for fuzzy matching across platforms.
+ * Strips punctuation, common suffixes, and extra whitespace.
+ */
+function normalizeRestaurantName(name) {
+  if (!name) return '';
+  return name
+    .toLowerCase()
+    // Remove possessives
+    .replace(/'s\b/g, 's')
+    // Strip punctuation except spaces
+    .replace(/[^a-z0-9\s]/g, '')
+    // Remove common chain suffixes that vary across platforms
+    .replace(/\b(restaurant|grill|kitchen|house|bar|cafe|eatery|express|inc|llc|co)\b/g, '')
+    // Collapse whitespace
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Find restaurants that appear on multiple platforms for the same search.
+ * Returns an array of match objects, each with per-platform data side by side.
+ *
+ * A "match" requires:
+ *  - Normalized name similarity (exact after normalization, OR one name contains the other)
+ *  - At least 2 different platforms
+ */
+function findRestaurantMatches(results) {
+  if (!results || results.length === 0) return [];
+
+  // Group all results by normalized restaurant name
+  const groups = new Map();
+  for (const r of results) {
+    const key = normalizeRestaurantName(r.restaurant);
+    if (!key) continue;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(r);
+  }
+
+  // Also do a second-pass fuzzy merge: if one normalized name contains another
+  // (e.g. "mcdonalds" vs "mcdonalds burger"), merge them
+  const keys = [...groups.keys()];
+  const merged = new Set();
+  for (let i = 0; i < keys.length; i++) {
+    if (merged.has(keys[i])) continue;
+    for (let j = i + 1; j < keys.length; j++) {
+      if (merged.has(keys[j])) continue;
+      const a = keys[i], b = keys[j];
+      // Only merge if one wholly contains the other and they're close in length
+      if ((a.includes(b) || b.includes(a)) && Math.abs(a.length - b.length) <= 8) {
+        // Merge shorter into longer
+        const [keep, drop] = a.length >= b.length ? [a, b] : [b, a];
+        const existing = groups.get(keep) || [];
+        groups.set(keep, [...existing, ...groups.get(drop)]);
+        groups.delete(drop);
+        merged.add(drop);
+      }
+    }
+  }
+
+  const matches = [];
+
+  for (const [normName, items] of groups.entries()) {
+    // Find unique platforms in this group
+    const platformSet = new Set(items.map(r => r.platform));
+    if (platformSet.size < 2) continue; // Only care about cross-platform matches
+
+    // For each platform, pick the best (cheapest total) item
+    const platforms = {};
+    for (const platform of platformSet) {
+      const platformItems = items.filter(r => r.platform === platform);
+      // Sort by totalPrice asc, then itemPrice asc
+      platformItems.sort((a, b) => {
+        const ta = a.totalPrice ?? (a.itemPrice ?? 999) + (a.deliveryFee ?? 0);
+        const tb = b.totalPrice ?? (b.itemPrice ?? 999) + (b.deliveryFee ?? 0);
+        return ta - tb;
+      });
+      const best = platformItems[0];
+      platforms[platform] = {
+        item:        best.item,
+        itemPrice:   best.itemPrice,
+        deliveryFee: best.deliveryFee ?? 0,
+        totalPrice:  best.totalPrice,
+        rating:      best.rating,
+        eta:         best.eta,
+        distance:    best.distance,
+        url:         best.url,
+      };
+    }
+
+    // Find which platform has the best (lowest) totalPrice
+    let bestPlatform = null;
+    let bestTotal = Infinity;
+    for (const [platform, data] of Object.entries(platforms)) {
+      const t = data.totalPrice ?? (data.itemPrice ?? 999);
+      if (t < bestTotal) { bestTotal = t; bestPlatform = platform; }
+    }
+    if (bestPlatform) platforms[bestPlatform].isBestDeal = true;
+
+    // Use the most "display-friendly" version of the restaurant name
+    // (prefer the longest original name, which tends to be more complete)
+    const displayName = items
+      .map(r => r.restaurant)
+      .sort((a, b) => b.length - a.length)[0];
+
+    matches.push({
+      normalizedName: normName,
+      displayName,
+      platformCount: platformSet.size,
+      platforms,
+    });
+  }
+
+  // Sort: most platforms first, then by best available total price
+  matches.sort((a, b) => {
+    if (b.platformCount !== a.platformCount) return b.platformCount - a.platformCount;
+    const aMin = Math.min(...Object.values(a.platforms).map(p => p.totalPrice ?? 999));
+    const bMin = Math.min(...Object.values(b.platforms).map(p => p.totalPrice ?? 999));
+    return aMin - bMin;
+  });
+
+  return matches;
 }
 
 function getRankFn(rankBy) {
@@ -127,4 +258,4 @@ function parseEta(eta) {
   return m ? parseInt(m[1]) : 999;
 }
 
-module.exports = { aggregate };
+module.exports = { aggregate, findRestaurantMatches, normalizeRestaurantName };
