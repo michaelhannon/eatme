@@ -66,10 +66,19 @@ function aggregate(allResults, rankBy = 'totalPrice') {
   // Sort
   const ranked = [...results].sort(getRankFn(rankBy));
 
-  // Mark best value
-  const bestIdx = ranked.findIndex(r => r.totalPrice != null);
-  if (bestIdx >= 0) ranked[bestIdx].isBestValue = true;
-  else if (ranked.length > 0) ranked[0].isBestValue = true;
+  // Mark best value — always the cheapest total price, independent of current sort order
+  const withTotalForBest = [...results].filter(r => r.totalPrice != null).sort((a, b) => a.totalPrice - b.totalPrice);
+  const bestResult = withTotalForBest[0] || results[0];
+  if (bestResult) {
+    ranked.forEach(r => {
+      r.isBestValue = (
+        r.platform === bestResult.platform &&
+        r.restaurant === bestResult.restaurant &&
+        r.item === bestResult.item &&
+        r.itemPrice === bestResult.itemPrice
+      );
+    });
+  }
 
   // Build summary
   const byPlatform = {};
@@ -121,12 +130,21 @@ function normalizeRestaurantName(name) {
   if (!name) return '';
   return name
     .toLowerCase()
+    // Strip parenthetical location qualifiers: "(Shrewsbury Plaza)", "(NJ)", "(2nd Ave)" etc.
+    .replace(/\s*\([^)]*\)/g, '')
+    // Strip "by [Brand]" ghost-kitchen suffixes: "Bobby Flay Steak by Wonder" → "Bobby Flay Steak"
+    .replace(/\s+by\s+\w+(\s+\w+)?$/, '')
+    // Strip trailing location words after a comma or em-dash: "Bullhorns Burger — Shrewsbury" → "Bullhorns Burger"
+    .replace(/\s*[\u2013\u2014\-]{1,2}\s*[A-Za-z][^,]*$/, '')
+    .replace(/,\s*[^,]+$/, '')
     // Remove possessives
     .replace(/'s\b/g, 's')
     // Strip punctuation except spaces
     .replace(/[^a-z0-9\s]/g, '')
     // Remove common chain suffixes that vary across platforms
     .replace(/\b(restaurant|grill|kitchen|house|bar|cafe|eatery|express|inc|llc|co)\b/g, '')
+    // Strip standalone location words that platforms append inconsistently
+    .replace(/\b(plaza|square|mall|center|centre|village|market|station)\b/g, '')
     // Collapse whitespace
     .replace(/\s+/g, ' ')
     .trim();
@@ -162,7 +180,7 @@ function findRestaurantMatches(results) {
       if (merged.has(keys[j])) continue;
       const a = keys[i], b = keys[j];
       // Only merge if one wholly contains the other and they're close in length
-      if ((a.includes(b) || b.includes(a)) && Math.abs(a.length - b.length) <= 8) {
+      if (a.includes(b) || b.includes(a)) {
         // Merge shorter into longer
         const [keep, drop] = a.length >= b.length ? [a, b] : [b, a];
         const existing = groups.get(keep) || [];
